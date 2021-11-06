@@ -1,8 +1,8 @@
 [package]
-authors = ["the rp-rs team"]
+authors = ["Daniel KJ"]
 edition = "2018"
 readme = "README.md"
-name = "rp2040-project-template"
+name = "macropad-rust"
 version = "0.1.0"
 resolver = "2"
 
