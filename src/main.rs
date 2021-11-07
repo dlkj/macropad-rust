@@ -7,21 +7,16 @@
 
 use adafruit_macropad::{
     hal,
-    hal::{
-        clocks::{init_clocks_and_plls, Clock},
-        pac,
-        pac::interrupt,
-        sio::Sio,
-        watchdog::Watchdog,
-    },
+    hal::{clocks::init_clocks_and_plls, pac, pac::interrupt, sio::Sio, watchdog::Watchdog},
     Pins,
 };
 
 //use adafruit_macropad::hal::prelude::*;
 
 use cortex_m_rt::entry;
+use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
-use embedded_time::rate::*;
+//use embedded_time::rate::*;
 
 use panic_halt as _;
 
@@ -39,10 +34,12 @@ static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 
 static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
 
+//static spinlock =
+
 #[entry]
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
+    //let core = pac::CorePeripherals::take().unwrap();
 
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
 
@@ -103,7 +100,7 @@ fn main() -> ! {
 
     //USB code now running
 
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
+    //let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
 
     let sio = Sio::new(pac.SIO);
     let pins = Pins::new(
@@ -114,11 +111,31 @@ fn main() -> ! {
     );
     let mut led_pin = pins.led.into_push_pull_output();
 
+    let button_pin = pins.button.into_pull_down_input();
+
+    let mut pressed = false;
+
     loop {
-        led_pin.set_high().unwrap();
-        delay.delay_ms(1500);
-        led_pin.set_low().unwrap();
-        delay.delay_ms(500);
+        // led_pin.set_high().unwrap();
+        // delay.delay_ms(1500);
+        // led_pin.set_low().unwrap();
+        // delay.delay_ms(500);
+
+        if button_pin.is_low().unwrap() && !pressed {
+            led_pin.set_high().unwrap();
+            pressed = true;
+
+            // We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
+            cortex_m::interrupt::free(|_| unsafe {
+                // Now interrupts are disabled, grab the global variable and, if
+                // available, send it a HID report
+                USB_SERIAL.as_mut().unwrap().write(b"Hello, World!\r\n")
+            })
+            .unwrap();
+        } else if button_pin.is_high().unwrap() {
+            led_pin.set_low().unwrap();
+            pressed = false;
+        }
     }
 }
 
