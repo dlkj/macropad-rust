@@ -20,6 +20,10 @@ rp2040-hal = { git = "https://github.com/rp-rs/rp-hal", branch="main", features=
 adafruit_macropad = { git = "https://github.com/rp-rs/rp-hal.git" }
 rp2040-boot2 = { git = "https://github.com/rp-rs/rp2040-boot2-rs", branch="main" }
 
+usb-device= "0.2.8"
+usbd-serial = "0.1.1"
+usbd-hid = "0.5.2"
+
 [features]
 default = [
     "defmt-default",
