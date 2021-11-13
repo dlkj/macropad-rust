@@ -115,6 +115,7 @@ fn main() -> ! {
 
     let mut pressed = false;
 
+    let mut count = 0;
     loop {
         // led_pin.set_high().unwrap();
         // delay.delay_ms(1500);
@@ -129,9 +130,16 @@ fn main() -> ! {
             cortex_m::interrupt::free(|cs| {
                 // Now interrupts are disabled, grab the global variable and, if
                 // available, send it a HID report
-                serial_write(cs, b"Hello, World!\r\n")
-            })
-            .unwrap();
+                serial_write(cs, b"Hello, World! ").unwrap();
+
+                let mut count_str = [0u8, 64];
+                count_str[0] = (count % 10) + 48; //generate asci digits
+                count_str[1] = 0;
+                serial_write(cs, &count_str).unwrap();
+                serial_write(cs, b"\r\n").unwrap()
+            });
+
+            count = (count + 1) % 10;
         } else if button_pin.is_high().unwrap() {
             led_pin.set_low().unwrap();
             pressed = false;
