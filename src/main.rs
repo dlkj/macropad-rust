@@ -13,6 +13,8 @@ use adafruit_macropad::{
 
 //use adafruit_macropad::hal::prelude::*;
 
+use core::cell::RefCell;
+use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
@@ -28,13 +30,11 @@ use usbd_serial::SerialPort;
 #[used]
 pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GD25Q64CS;
 
-static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
+static USB_DEVICE: Mutex<RefCell<Option<UsbDevice<hal::usb::UsbBus>>>> =
+    Mutex::new(RefCell::new(None));
 
-static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
-
-static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
-
-//static spinlock =
+static USB_SERIAL: Mutex<RefCell<Option<SerialPort<hal::usb::UsbBus>>>> =
+    Mutex::new(RefCell::new(None));
 
 #[entry]
 fn main() -> ! {
@@ -65,6 +65,8 @@ fn main() -> ! {
         &mut pac.RESETS,
     ));
 
+    static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
+
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet
         USB_BUS = Some(usb_bus);
@@ -77,9 +79,6 @@ fn main() -> ! {
 
     // Set up the USB Communications Class Device driver
     let serial = SerialPort::new(bus_ref);
-    unsafe {
-        USB_SERIAL = Some(serial);
-    }
 
     // Create a USB device with a fake VID and PID
     let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x16c0, 0x27dd))
@@ -88,10 +87,11 @@ fn main() -> ! {
         .serial_number("TEST")
         .device_class(2) // from: https://www.usb.org/defined-class-codes
         .build();
-    unsafe {
-        // Note (safety): This is safe as interrupts haven't been started yet
-        USB_DEVICE = Some(usb_dev);
-    }
+
+    cortex_m::interrupt::free(|cs| {
+        USB_SERIAL.borrow(cs).replace(Some(serial));
+        USB_DEVICE.borrow(cs).replace(Some(usb_dev));
+    });
 
     // Enable the USB interrupt
     unsafe {
@@ -126,10 +126,10 @@ fn main() -> ! {
             pressed = true;
 
             // We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
-            cortex_m::interrupt::free(|_| unsafe {
+            cortex_m::interrupt::free(|cs| {
                 // Now interrupts are disabled, grab the global variable and, if
                 // available, send it a HID report
-                USB_SERIAL.as_mut().unwrap().write(b"Hello, World!\r\n")
+                serial_write(cs, b"Hello, World!\r\n")
             })
             .unwrap();
         } else if button_pin.is_high().unwrap() {
@@ -152,21 +152,22 @@ fn USBCTRL_IRQ() {
     /// Note whether we've already printed the "hello" message.
     static SAID_HELLO: AtomicBool = AtomicBool::new(false);
 
-    // Grab the global objects. This is OK as we only access them under interrupt.
-    unsafe {
-        let usb_dev = USB_DEVICE.as_mut().unwrap();
-        let serial = USB_SERIAL.as_mut().unwrap();
-
+    cortex_m::interrupt::free(|cs| {
         // Say hello exactly once on start-up
         if !SAID_HELLO.load(Ordering::Relaxed) {
             SAID_HELLO.store(true, Ordering::Relaxed);
-            let _ = serial.write(b"Hello, World!\r\n");
+            let _ = serial_write(cs, b"Hello, World!\r\n");
         }
-
         // Poll the USB driver with all of our supported USB Classes
-        if usb_dev.poll(&mut [serial]) {
+        if USB_DEVICE
+            .borrow(cs)
+            .borrow_mut()
+            .as_mut()
+            .unwrap()
+            .poll(&mut [USB_SERIAL.borrow(cs).borrow_mut().as_mut().unwrap()])
+        {
             let mut buf = [0u8; 64];
-            match serial.read(&mut buf) {
+            match serial_read(cs, &mut buf) {
                 Err(_e) => {
                     // Do nothing
                 }
@@ -178,16 +179,36 @@ fn USBCTRL_IRQ() {
                     buf.iter_mut().take(count).for_each(|b| {
                         b.make_ascii_uppercase();
                     });
-
                     // Send back to the host
                     let mut wr_ptr = &buf[..count];
                     while !wr_ptr.is_empty() {
-                        let _ = serial.write(wr_ptr).map(|len| {
+                        let _ = serial_write(cs, wr_ptr).map(|len| {
                             wr_ptr = &wr_ptr[len..];
                         });
                     }
                 }
             }
         }
-    }
+    });
+}
+
+fn serial_write(cs: &cortex_m::interrupt::CriticalSection, data: &[u8]) -> Result<usize, UsbError> {
+    USB_SERIAL
+        .borrow(cs)
+        .borrow_mut()
+        .as_mut()
+        .unwrap()
+        .write(data)
+}
+
+fn serial_read(
+    cs: &cortex_m::interrupt::CriticalSection,
+    data: &mut [u8],
+) -> Result<usize, UsbError> {
+    USB_SERIAL
+        .borrow(cs)
+        .borrow_mut()
+        .as_mut()
+        .unwrap()
+        .read(data)
 }
