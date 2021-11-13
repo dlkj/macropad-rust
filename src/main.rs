@@ -7,23 +7,32 @@
 
 use adafruit_macropad::{
     hal,
-    hal::{clocks::init_clocks_and_plls, pac, pac::interrupt, sio::Sio, watchdog::Watchdog},
+    hal::{
+        clocks::{init_clocks_and_plls, Clock},
+        pac::{self, interrupt},
+        sio::Sio,
+        watchdog::Watchdog,
+    },
     Pins,
 };
-
 //use adafruit_macropad::hal::prelude::*;
 
 use core::cell::RefCell;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
+use embedded_graphics::{
+    image::{Image, ImageRawLE},
+    pixelcolor::BinaryColor,
+    prelude::*,
+};
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
-//use embedded_time::rate::*;
+use embedded_time::rate::Extensions;
 
 use panic_halt as _;
 
+use sh1106::{prelude::*, Builder};
 use usb_device::{class_prelude::*, prelude::*};
-
 use usbd_serial::SerialPort;
 
 #[link_section = ".boot2"]
@@ -39,7 +48,6 @@ static USB_SERIAL: Mutex<RefCell<Option<SerialPort<hal::usb::UsbBus>>>> =
 #[entry]
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
-    //let core = pac::CorePeripherals::take().unwrap();
 
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
 
@@ -55,6 +63,49 @@ fn main() -> ! {
     )
     .ok()
     .unwrap();
+
+    let sio = Sio::new(pac.SIO);
+    let pins = Pins::new(
+        pac.IO_BANK0,
+        pac.PADS_BANK0,
+        sio.gpio_bank0,
+        &mut pac.RESETS,
+    );
+
+    // These are implicitly used by the spi driver if they are in the correct mode
+    let _spi_sclk = pins.sclk.into_mode::<hal::gpio::FunctionSpi>();
+    let _spi_mosi = pins.mosi.into_mode::<hal::gpio::FunctionSpi>();
+    let _spi_miso = pins.miso.into_mode::<hal::gpio::FunctionSpi>();
+    let spi = hal::spi::Spi::<_, _, 8>::new(pac.SPI1);
+
+    // Display control pins
+    let oled_dc = pins.oled_dc.into_push_pull_output();
+    let oled_cs = pins.oled_cs.into_push_pull_output();
+    let mut oled_reset = pins.oled_reset.into_push_pull_output();
+    oled_reset.set_high().unwrap(); //disable screen reset
+
+    // Exchange the uninitialised SPI driver for an initialised one
+    let oled_spi = spi.init(
+        &mut pac.RESETS,
+        clocks.peripheral_clock.freq(),
+        16_000_000u32.Hz(),
+        &embedded_hal::spi::MODE_0,
+    );
+
+    let mut display: GraphicsMode<_> = Builder::new()
+        .connect_spi(oled_spi, oled_dc, oled_cs)
+        .into();
+
+    display.init().unwrap();
+    display.flush().unwrap();
+
+    let im: ImageRawLE<BinaryColor> = ImageRawLE::new(include_bytes!("./rust.raw"), 64);
+
+    Image::new(&im, Point::new(32, 0))
+        .draw(&mut display)
+        .unwrap();
+
+    display.flush().unwrap();
 
     // Set up the USB driver
     let usb_bus = UsbBusAllocator::new(hal::usb::UsbBus::new(
@@ -102,13 +153,6 @@ fn main() -> ! {
 
     //let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
 
-    let sio = Sio::new(pac.SIO);
-    let pins = Pins::new(
-        pac.IO_BANK0,
-        pac.PADS_BANK0,
-        sio.gpio_bank0,
-        &mut pac.RESETS,
-    );
     let mut led_pin = pins.led.into_push_pull_output();
 
     let button_pin = pins.button.into_pull_down_input();
