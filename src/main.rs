@@ -153,22 +153,51 @@ fn main() -> ! {
 
     //let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
 
-    let mut led_pin = pins.led.into_push_pull_output();
+    let mut led_pin: adafruit_macropad::hal::gpio::Pin<_, _> = pins.led.into_push_pull_output();
 
-    let button_pin = pins.button.into_pull_down_input();
+    let button_pin: adafruit_macropad::hal::gpio::Pin<_, _> = pins.button.into_pull_down_input();
 
-    let mut pressed = false;
+    let mut s = State::new();
 
-    let mut count = 0;
     loop {
+        s.update(&button_pin, &mut led_pin);
+    }
+}
+
+struct State {
+    count: u8,
+    pressed: bool,
+}
+
+impl State {
+    fn new() -> State {
+        State {
+            count: 0,
+            pressed: false,
+        }
+    }
+
+    fn update<
+        II: adafruit_macropad::hal::gpio::PinId,
+        IC: adafruit_macropad::hal::gpio::InputConfig,
+        OI: adafruit_macropad::hal::gpio::PinId,
+        OC: adafruit_macropad::hal::gpio::OutputConfig,
+    >(
+        &mut self,
+        button_pin: &adafruit_macropad::hal::gpio::Pin<II, adafruit_macropad::hal::gpio::Input<IC>>,
+        led_pin: &mut adafruit_macropad::hal::gpio::Pin<
+            OI,
+            adafruit_macropad::hal::gpio::Output<OC>,
+        >,
+    ) -> () {
         // led_pin.set_high().unwrap();
         // delay.delay_ms(1500);
         // led_pin.set_low().unwrap();
         // delay.delay_ms(500);
 
-        if button_pin.is_low().unwrap() && !pressed {
+        if button_pin.is_low().unwrap() && !self.pressed {
             led_pin.set_high().unwrap();
-            pressed = true;
+            self.pressed = true;
 
             // We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
             cortex_m::interrupt::free(|cs| {
@@ -177,16 +206,16 @@ fn main() -> ! {
                 serial_write(cs, b"Hello, World! ").unwrap();
 
                 let mut count_str = [0u8, 64];
-                count_str[0] = (count % 10) + 48; //generate asci digits
+                count_str[0] = (self.count % 10) + 48; //generate asci digits
                 count_str[1] = 0;
                 serial_write(cs, &count_str).unwrap();
                 serial_write(cs, b"\r\n").unwrap()
             });
 
-            count = (count + 1) % 10;
+            self.count = (self.count + 1) % 10;
         } else if button_pin.is_high().unwrap() {
             led_pin.set_low().unwrap();
-            pressed = false;
+            self.pressed = false;
         }
     }
 }
