@@ -8,26 +8,30 @@
 use adafruit_macropad::{
     hal,
     hal::{
-        clocks::{init_clocks_and_plls, Clock},
+        clocks::Clock,
         pac::{self, interrupt},
         sio::Sio,
         watchdog::Watchdog,
     },
     Pins,
 };
-//use adafruit_macropad::hal::prelude::*;
-
 use core::cell::RefCell;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
 use embedded_graphics::{
     image::{Image, ImageRawLE},
+    mono_font::{ascii::FONT_6X10, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
+    primitives::{
+        Circle, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle, StrokeAlignment, Triangle,
+    },
+    text::{Alignment, Text},
 };
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
-use embedded_time::rate::Extensions;
+use embedded_time::fixed_point::FixedPoint;
+use embedded_time::rate::units::Extensions;
 
 use panic_halt as _;
 
@@ -48,11 +52,12 @@ static USB_SERIAL: Mutex<RefCell<Option<SerialPort<hal::usb::UsbBus>>>> =
 #[entry]
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
+    let core = pac::CorePeripherals::take().unwrap();
 
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
 
     let external_xtal_freq_hz = 12_000_000u32;
-    let clocks = init_clocks_and_plls(
+    let clocks = hal::clocks::init_clocks_and_plls(
         external_xtal_freq_hz,
         pac.XOSC,
         pac.CLOCKS,
@@ -99,14 +104,6 @@ fn main() -> ! {
     display.init().unwrap();
     display.flush().unwrap();
 
-    let im: ImageRawLE<BinaryColor> = ImageRawLE::new(include_bytes!("./rust.raw"), 64);
-
-    Image::new(&im, Point::new(32, 0))
-        .draw(&mut display)
-        .unwrap();
-
-    display.flush().unwrap();
-
     // Set up the USB driver
     let usb_bus = UsbBusAllocator::new(hal::usb::UsbBus::new(
         pac.USBCTRL_REGS,
@@ -151,17 +148,90 @@ fn main() -> ! {
 
     //USB code now running
 
-    //let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
+
+    let im: ImageRawLE<BinaryColor> = ImageRawLE::new(include_bytes!("./rust.raw"), 64);
+
+    Image::new(&im, Point::new(32, 0))
+        .draw(&mut display)
+        .unwrap();
+
+    display.flush().unwrap();
+    delay.delay_ms(500);
+
+    graphics_test(&mut display);
 
     let mut led_pin: adafruit_macropad::hal::gpio::Pin<_, _> = pins.led.into_push_pull_output();
-
     let button_pin: adafruit_macropad::hal::gpio::Pin<_, _> = pins.button.into_pull_down_input();
-
     let mut s = State::new();
 
     loop {
         s.update(&button_pin, &mut led_pin);
     }
+}
+
+fn graphics_test<DI>(display: &mut GraphicsMode<DI>) -> ()
+where
+    DI: sh1106::interface::DisplayInterface,
+    <DI as sh1106::interface::DisplayInterface>::Error: core::fmt::Debug,
+{
+    // Create styles used by the drawing operations.
+    let thin_stroke = PrimitiveStyle::with_stroke(BinaryColor::On, 1);
+    let thick_stroke = PrimitiveStyle::with_stroke(BinaryColor::On, 3);
+    let border_stroke = PrimitiveStyleBuilder::new()
+        .stroke_color(BinaryColor::On)
+        .stroke_width(3)
+        .stroke_alignment(StrokeAlignment::Inside)
+        .build();
+    let fill = PrimitiveStyle::with_fill(BinaryColor::On);
+    let character_style = MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
+
+    let yoffset = 10;
+
+    display.clear();
+
+    // Draw a 3px wide outline around the display.
+    display
+        .bounding_box()
+        .into_styled(border_stroke)
+        .draw(display)
+        .unwrap();
+
+    // Draw a triangle.
+    Triangle::new(
+        Point::new(16, 16 + yoffset),
+        Point::new(16 + 16, 16 + yoffset),
+        Point::new(16 + 8, yoffset),
+    )
+    .into_styled(thin_stroke)
+    .draw(display)
+    .unwrap();
+
+    // Draw a filled square
+    Rectangle::new(Point::new(52, yoffset), Size::new(16, 16))
+        .into_styled(fill)
+        .draw(display)
+        .unwrap();
+
+    // Draw a circle with a 3px wide stroke.
+    Circle::new(Point::new(88, yoffset), 17)
+        .into_styled(thick_stroke)
+        .draw(display)
+        .unwrap();
+
+    // Draw centered text.
+    let text = "embedded-graphics";
+    Text::with_alignment(
+        text,
+        display.bounding_box().center() + Point::new(0, 15),
+        character_style,
+        Alignment::Center,
+    )
+    .draw(display)
+    .unwrap();
+
+    let r: Result<(), _> = display.flush();
+    r.unwrap()
 }
 
 struct State {
@@ -177,19 +247,20 @@ impl State {
         }
     }
 
-    fn update<
-        II: adafruit_macropad::hal::gpio::PinId,
-        IC: adafruit_macropad::hal::gpio::InputConfig,
-        OI: adafruit_macropad::hal::gpio::PinId,
-        OC: adafruit_macropad::hal::gpio::OutputConfig,
-    >(
+    fn update<II, IC, OI, OC>(
         &mut self,
         button_pin: &adafruit_macropad::hal::gpio::Pin<II, adafruit_macropad::hal::gpio::Input<IC>>,
         led_pin: &mut adafruit_macropad::hal::gpio::Pin<
             OI,
             adafruit_macropad::hal::gpio::Output<OC>,
         >,
-    ) -> () {
+    ) -> ()
+    where
+        II: adafruit_macropad::hal::gpio::PinId,
+        IC: adafruit_macropad::hal::gpio::InputConfig,
+        OI: adafruit_macropad::hal::gpio::PinId,
+        OC: adafruit_macropad::hal::gpio::OutputConfig,
+    {
         // led_pin.set_high().unwrap();
         // delay.delay_ms(1500);
         // led_pin.set_low().unwrap();
