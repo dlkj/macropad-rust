@@ -5,6 +5,10 @@
 #![no_std]
 #![no_main]
 
+mod oled_display;
+
+use crate::oled_display::OledDisplay;
+
 use adafruit_macropad::{
     hal,
     hal::{
@@ -18,23 +22,11 @@ use adafruit_macropad::{
 use core::cell::RefCell;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
-use embedded_graphics::{
-    image::{Image, ImageRawLE},
-    mono_font::{ascii::FONT_6X10, MonoTextStyle},
-    pixelcolor::BinaryColor,
-    prelude::*,
-    primitives::{
-        Circle, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle, StrokeAlignment, Triangle,
-    },
-    text::{Alignment, Text},
-};
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::units::Extensions;
-
 use panic_halt as _;
-
 use sh1106::{prelude::*, Builder};
 use usb_device::{class_prelude::*, prelude::*};
 use usbd_serial::SerialPort;
@@ -104,6 +96,8 @@ fn main() -> ! {
     display.init().unwrap();
     display.flush().unwrap();
 
+    let mut oled_display = OledDisplay::new(display);
+
     // Set up the USB driver
     let usb_bus = UsbBusAllocator::new(hal::usb::UsbBus::new(
         pac.USBCTRL_REGS,
@@ -150,124 +144,55 @@ fn main() -> ! {
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
 
-    let im: ImageRawLE<BinaryColor> = ImageRawLE::new(include_bytes!("./rust.raw"), 64);
-
-    Image::new(&im, Point::new(32, 0))
-        .draw(&mut display)
+    oled_display
+        .draw_image(include_bytes!("./rust.raw"), 64)
         .unwrap();
 
-    display.flush().unwrap();
     delay.delay_ms(500);
 
-    graphics_test(&mut display);
+    oled_display.draw_test().unwrap();
 
-    let mut led_pin: adafruit_macropad::hal::gpio::Pin<_, _> = pins.led.into_push_pull_output();
+    let led_pin: adafruit_macropad::hal::gpio::Pin<_, _> = pins.led.into_push_pull_output();
     let button_pin: adafruit_macropad::hal::gpio::Pin<_, _> = pins.button.into_pull_down_input();
-    let mut s = State::new();
+    let mut s = State::new(button_pin, led_pin);
 
     loop {
-        s.update(&button_pin, &mut led_pin);
+        s.update().unwrap();
     }
 }
 
-fn graphics_test<DI>(display: &mut GraphicsMode<DI>) -> ()
+struct State<BP, LP, PinE>
 where
-    DI: sh1106::interface::DisplayInterface,
-    <DI as sh1106::interface::DisplayInterface>::Error: core::fmt::Debug,
+    BP: InputPin<Error = PinE>,
+    LP: OutputPin<Error = PinE>,
+    PinE: core::fmt::Debug,
 {
-    // Create styles used by the drawing operations.
-    let thin_stroke = PrimitiveStyle::with_stroke(BinaryColor::On, 1);
-    let thick_stroke = PrimitiveStyle::with_stroke(BinaryColor::On, 3);
-    let border_stroke = PrimitiveStyleBuilder::new()
-        .stroke_color(BinaryColor::On)
-        .stroke_width(3)
-        .stroke_alignment(StrokeAlignment::Inside)
-        .build();
-    let fill = PrimitiveStyle::with_fill(BinaryColor::On);
-    let character_style = MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
-
-    let yoffset = 10;
-
-    display.clear();
-
-    // Draw a 3px wide outline around the display.
-    display
-        .bounding_box()
-        .into_styled(border_stroke)
-        .draw(display)
-        .unwrap();
-
-    // Draw a triangle.
-    Triangle::new(
-        Point::new(16, 16 + yoffset),
-        Point::new(16 + 16, 16 + yoffset),
-        Point::new(16 + 8, yoffset),
-    )
-    .into_styled(thin_stroke)
-    .draw(display)
-    .unwrap();
-
-    // Draw a filled square
-    Rectangle::new(Point::new(52, yoffset), Size::new(16, 16))
-        .into_styled(fill)
-        .draw(display)
-        .unwrap();
-
-    // Draw a circle with a 3px wide stroke.
-    Circle::new(Point::new(88, yoffset), 17)
-        .into_styled(thick_stroke)
-        .draw(display)
-        .unwrap();
-
-    // Draw centered text.
-    let text = "embedded-graphics";
-    Text::with_alignment(
-        text,
-        display.bounding_box().center() + Point::new(0, 15),
-        character_style,
-        Alignment::Center,
-    )
-    .draw(display)
-    .unwrap();
-
-    let r: Result<(), _> = display.flush();
-    r.unwrap()
-}
-
-struct State {
     count: u8,
     pressed: bool,
+    button_pin: BP,
+    led_pin: LP,
 }
 
-impl State {
-    fn new() -> State {
+impl<BP: InputPin<Error = PinE>, LP: OutputPin<Error = PinE>, PinE: core::fmt::Debug>
+    State<BP, LP, PinE>
+{
+    fn new(button_pin: BP, led_pin: LP) -> State<BP, LP, PinE>
+    where
+        BP: InputPin<Error = PinE>,
+        LP: OutputPin<Error = PinE>,
+        PinE: core::fmt::Debug,
+    {
         State {
             count: 0,
             pressed: false,
+            button_pin,
+            led_pin,
         }
     }
 
-    fn update<II, IC, OI, OC>(
-        &mut self,
-        button_pin: &adafruit_macropad::hal::gpio::Pin<II, adafruit_macropad::hal::gpio::Input<IC>>,
-        led_pin: &mut adafruit_macropad::hal::gpio::Pin<
-            OI,
-            adafruit_macropad::hal::gpio::Output<OC>,
-        >,
-    ) -> ()
-    where
-        II: adafruit_macropad::hal::gpio::PinId,
-        IC: adafruit_macropad::hal::gpio::InputConfig,
-        OI: adafruit_macropad::hal::gpio::PinId,
-        OC: adafruit_macropad::hal::gpio::OutputConfig,
-    {
-        // led_pin.set_high().unwrap();
-        // delay.delay_ms(1500);
-        // led_pin.set_low().unwrap();
-        // delay.delay_ms(500);
-
-        if button_pin.is_low().unwrap() && !self.pressed {
-            led_pin.set_high().unwrap();
+    fn update(&mut self) -> Result<(), PinE> {
+        if self.button_pin.is_low()? && !self.pressed {
+            self.led_pin.set_high()?;
             self.pressed = true;
 
             // We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
@@ -284,10 +209,12 @@ impl State {
             });
 
             self.count = (self.count + 1) % 10;
-        } else if button_pin.is_high().unwrap() {
-            led_pin.set_low().unwrap();
+        } else if self.button_pin.is_high()? {
+            self.led_pin.set_low()?;
             self.pressed = false;
         }
+
+        Ok(())
     }
 }
 
