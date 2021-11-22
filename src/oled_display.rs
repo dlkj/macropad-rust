@@ -1,6 +1,6 @@
 use embedded_graphics::{
     image::{Image, ImageRawLE},
-    mono_font::{ascii::FONT_6X10, MonoTextStyle},
+    mono_font::{ascii::FONT_4X6, ascii::FONT_6X10, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::{
@@ -31,6 +31,17 @@ impl<DI: DisplayInterface> OledDisplay<DI> {
             .draw(&mut self.display)
             .unwrap();
 
+        self.display.flush()?;
+
+        Ok(())
+    }
+
+    pub fn draw_text(&mut self, text: &str) -> Result<(), DI::Error> {
+        self.display.clear();
+        let character_style = MonoTextStyle::new(&FONT_4X6, BinaryColor::On);
+        Text::with_alignment(text, Point::new(0, 6), character_style, Alignment::Left)
+            .draw(&mut self.display)
+            .unwrap();
         self.display.flush()?;
 
         Ok(())

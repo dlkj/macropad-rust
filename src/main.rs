@@ -8,13 +8,13 @@
 mod oled_display;
 
 use crate::oled_display::OledDisplay;
-
 use adafruit_macropad::{
-    hal,
     hal::{
+        self as rp2040_hal,
         clocks::Clock,
         pac::{self, interrupt},
         sio::Sio,
+        usb::UsbBus,
         watchdog::Watchdog,
     },
     Pins,
@@ -35,11 +35,29 @@ use usbd_serial::SerialPort;
 #[used]
 pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GD25Q64CS;
 
-static USB_DEVICE: Mutex<RefCell<Option<UsbDevice<hal::usb::UsbBus>>>> =
-    Mutex::new(RefCell::new(None));
+static USB_DEVICE: Mutex<RefCell<Option<UsbDevice<UsbBus>>>> = Mutex::new(RefCell::new(None));
 
-static USB_SERIAL: Mutex<RefCell<Option<SerialPort<hal::usb::UsbBus>>>> =
-    Mutex::new(RefCell::new(None));
+static USB_SERIAL: Mutex<RefCell<Option<SerialPort<UsbBus>>>> = Mutex::new(RefCell::new(None));
+
+static OLED_DISPLAY: Mutex<
+    RefCell<
+        Option<
+            OledDisplay<
+                sh1106::interface::SpiInterface<
+                    rp2040_hal::spi::Spi<rp2040_hal::spi::Enabled, rp2040_hal::pac::SPI1, 8_u8>,
+                    rp2040_hal::gpio::Pin<
+                        rp2040_hal::gpio::bank0::Gpio24,
+                        rp2040_hal::gpio::Output<rp2040_hal::gpio::PushPull>,
+                    >,
+                    rp2040_hal::gpio::Pin<
+                        rp2040_hal::gpio::bank0::Gpio22,
+                        rp2040_hal::gpio::Output<rp2040_hal::gpio::PushPull>,
+                    >,
+                >,
+            >,
+        >,
+    >,
+> = Mutex::new(RefCell::new(None));
 
 #[entry]
 fn main() -> ! {
@@ -49,7 +67,7 @@ fn main() -> ! {
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
 
     let external_xtal_freq_hz = 12_000_000u32;
-    let clocks = hal::clocks::init_clocks_and_plls(
+    let clocks = rp2040_hal::clocks::init_clocks_and_plls(
         external_xtal_freq_hz,
         pac.XOSC,
         pac.CLOCKS,
@@ -70,16 +88,18 @@ fn main() -> ! {
     );
 
     // These are implicitly used by the spi driver if they are in the correct mode
-    let _spi_sclk = pins.sclk.into_mode::<hal::gpio::FunctionSpi>();
-    let _spi_mosi = pins.mosi.into_mode::<hal::gpio::FunctionSpi>();
-    let _spi_miso = pins.miso.into_mode::<hal::gpio::FunctionSpi>();
-    let spi = hal::spi::Spi::<_, _, 8>::new(pac.SPI1);
+    let _spi_sclk = pins.sclk.into_mode::<rp2040_hal::gpio::FunctionSpi>();
+    let _spi_mosi = pins.mosi.into_mode::<rp2040_hal::gpio::FunctionSpi>();
+    let _spi_miso = pins.miso.into_mode::<rp2040_hal::gpio::FunctionSpi>();
+    let spi = rp2040_hal::spi::Spi::<_, _, 8>::new(pac.SPI1);
 
     // Display control pins
     let oled_dc = pins.oled_dc.into_push_pull_output();
     let oled_cs = pins.oled_cs.into_push_pull_output();
     let mut oled_reset = pins.oled_reset.into_push_pull_output();
-    oled_reset.set_high().unwrap(); //disable screen reset
+
+    let res = oled_reset.set_high();
+    res.unwrap(); //disable screen reset
 
     // Exchange the uninitialised SPI driver for an initialised one
     let oled_spi = spi.init(
@@ -96,10 +116,10 @@ fn main() -> ! {
     display.init().unwrap();
     display.flush().unwrap();
 
-    let mut oled_display = OledDisplay::new(display);
+    let oled_display = OledDisplay::new(display);
 
     // Set up the USB driver
-    let usb_bus = UsbBusAllocator::new(hal::usb::UsbBus::new(
+    let usb_bus = UsbBusAllocator::new(rp2040_hal::usb::UsbBus::new(
         pac.USBCTRL_REGS,
         pac.USBCTRL_DPRAM,
         clocks.usb_clock,
@@ -107,7 +127,7 @@ fn main() -> ! {
         &mut pac.RESETS,
     ));
 
-    static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
+    static mut USB_BUS: Option<UsbBusAllocator<rp2040_hal::usb::UsbBus>> = None;
 
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet
@@ -133,35 +153,69 @@ fn main() -> ! {
     cortex_m::interrupt::free(|cs| {
         USB_SERIAL.borrow(cs).replace(Some(serial));
         USB_DEVICE.borrow(cs).replace(Some(usb_dev));
+        OLED_DISPLAY.borrow(cs).replace(Some(oled_display));
     });
 
     // Enable the USB interrupt
     unsafe {
-        pac::NVIC::unmask(hal::pac::Interrupt::USBCTRL_IRQ);
+        pac::NVIC::unmask(rp2040_hal::pac::Interrupt::USBCTRL_IRQ);
     };
 
     //USB code now running
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
 
-    oled_display
-        .draw_image(include_bytes!("./rust.raw"), 64)
-        .unwrap();
+    //Rust logo splash screen
+    cortex_m::interrupt::free(|cs| {
+        let mut oled_display_ref = OLED_DISPLAY.borrow(cs).borrow_mut();
+        let oled_display = oled_display_ref.as_mut().unwrap();
+        oled_display
+            .draw_image(include_bytes!("./rust.raw"), 64)
+            .unwrap();
+    });
 
-    delay.delay_ms(500);
+    delay.delay_ms(1000);
 
-    oled_display.draw_test().unwrap();
+    //Do some example graphics drawing
+    cortex_m::interrupt::free(|cs| {
+        let mut oled_display_ref = OLED_DISPLAY.borrow(cs).borrow_mut();
+        let oled_display = oled_display_ref.as_mut().unwrap();
+        oled_display.draw_test().unwrap();
+    });
 
-    let led_pin: adafruit_macropad::hal::gpio::Pin<_, _> = pins.led.into_push_pull_output();
-    let button_pin: adafruit_macropad::hal::gpio::Pin<_, _> = pins.button.into_pull_down_input();
-    let mut s = State::new(button_pin, led_pin);
+    let led_pin = pins.led.into_push_pull_output();
+    let button_pin = pins.button.into_pull_down_input();
+
+    let mut lf = LedFlasher::new(button_pin, led_pin);
 
     loop {
-        s.update().unwrap();
+        //Flash the led
+        //oled_display.draw_text("pre fash").unwrap();
+        lf.update().unwrap();
+        //oled_display.draw_text("post fash").unwrap();
     }
 }
 
-struct State<BP, LP, PinE>
+fn _show_error<DI, E>(e: UsbError, oled_display: &mut OledDisplay<DI>) -> ()
+where
+    DI: sh1106::interface::DisplayInterface<Error = E>,
+    E: core::fmt::Debug,
+{
+    match e {
+        UsbError::BufferOverflow => oled_display.draw_text("BufferOverflow").unwrap(),
+        UsbError::EndpointMemoryOverflow => {
+            oled_display.draw_text("EndpointMemoryOverflow").unwrap()
+        }
+        UsbError::EndpointOverflow => oled_display.draw_text("EndpointOverflow").unwrap(),
+        UsbError::InvalidEndpoint => oled_display.draw_text("InvalidEndpoint").unwrap(),
+        UsbError::InvalidState => oled_display.draw_text("InvalidState").unwrap(),
+        UsbError::ParseError => oled_display.draw_text("ParseError").unwrap(),
+        UsbError::Unsupported => oled_display.draw_text("Unsupported").unwrap(),
+        UsbError::WouldBlock => {}
+    }
+}
+
+struct LedFlasher<BP, LP, PinE>
 where
     BP: InputPin<Error = PinE>,
     LP: OutputPin<Error = PinE>,
@@ -174,15 +228,15 @@ where
 }
 
 impl<BP: InputPin<Error = PinE>, LP: OutputPin<Error = PinE>, PinE: core::fmt::Debug>
-    State<BP, LP, PinE>
+    LedFlasher<BP, LP, PinE>
 {
-    fn new(button_pin: BP, led_pin: LP) -> State<BP, LP, PinE>
+    fn new(button_pin: BP, led_pin: LP) -> LedFlasher<BP, LP, PinE>
     where
         BP: InputPin<Error = PinE>,
         LP: OutputPin<Error = PinE>,
         PinE: core::fmt::Debug,
     {
-        State {
+        LedFlasher {
             count: 0,
             pressed: false,
             button_pin,
@@ -197,15 +251,18 @@ impl<BP: InputPin<Error = PinE>, LP: OutputPin<Error = PinE>, PinE: core::fmt::D
 
             // We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
             cortex_m::interrupt::free(|cs| {
+                let mut serial_ref = USB_SERIAL.borrow(cs).borrow_mut();
+                let serial = serial_ref.as_mut().unwrap();
+
                 // Now interrupts are disabled, grab the global variable and, if
                 // available, send it a HID report
-                serial_write(cs, b"Hello, World! ").unwrap();
+                serial.write(b"Hello, World! ").unwrap();
 
                 let mut count_str = [0u8, 64];
                 count_str[0] = (self.count % 10) + 48; //generate asci digits
                 count_str[1] = 0;
-                serial_write(cs, &count_str).unwrap();
-                serial_write(cs, b"\r\n").unwrap()
+                serial.write(&count_str).unwrap();
+                serial.write(b"\r\n").unwrap()
             });
 
             self.count = (self.count + 1) % 10;
@@ -226,34 +283,45 @@ impl<BP: InputPin<Error = PinE>, LP: OutputPin<Error = PinE>, PinE: core::fmt::D
 #[allow(non_snake_case)]
 #[interrupt]
 fn USBCTRL_IRQ() {
-    use core::sync::atomic::{AtomicBool, Ordering};
-
-    /// Note whether we've already printed the "hello" message.
-    static SAID_HELLO: AtomicBool = AtomicBool::new(false);
-
     cortex_m::interrupt::free(|cs| {
-        // Say hello exactly once on start-up
-        if !SAID_HELLO.load(Ordering::Relaxed) {
-            SAID_HELLO.store(true, Ordering::Relaxed);
-            let _ = serial_write(cs, b"Hello, World!\r\n");
-        }
+        let mut display_ref = OLED_DISPLAY.borrow(cs).borrow_mut();
+        let display = display_ref.as_mut().unwrap();
+
+        let mut serial_ref = USB_SERIAL.borrow(cs).borrow_mut();
+        let serial = serial_ref.as_mut().unwrap();
+
         // Poll the USB driver with all of our supported USB Classes
         if USB_DEVICE
             .borrow(cs)
             .borrow_mut()
             .as_mut()
             .unwrap()
-            .poll(&mut [USB_SERIAL.borrow(cs).borrow_mut().as_mut().unwrap()])
+            .poll(&mut [serial])
         {
             let mut buf = [0u8; 64];
-            match serial_read(cs, &mut buf) {
+            match serial.read(&mut buf) {
                 Err(_e) => {
+                    //show_error(_e, &mut oled_display);
                     // Do nothing
                 }
                 Ok(0) => {
                     // Do nothing
                 }
-                Ok(count) => {
+                Ok(_count) => {
+                    //oled_display.draw_text("pre write").unwrap();
+                    match serial.write(b".") {
+                        Err(_e) => {} //show_error(e, &mut oled_display),
+                        Ok(_) => {}
+                    }
+
+                    let s = unsafe {
+                        core::str::from_utf8(core::slice::from_raw_parts(buf.as_ptr(), _count))
+                    };
+                    display.draw_text(s.unwrap()).unwrap();
+
+                    //oled_display.draw_text("post write").unwrap();
+
+                    /*
                     // Convert to upper case
                     buf.iter_mut().take(count).for_each(|b| {
                         b.make_ascii_uppercase();
@@ -261,33 +329,13 @@ fn USBCTRL_IRQ() {
                     // Send back to the host
                     let mut wr_ptr = &buf[..count];
                     while !wr_ptr.is_empty() {
-                        let _ = serial_write(cs, wr_ptr).map(|len| {
+                        let _ = serial.write(wr_ptr).map(|len| {
                             wr_ptr = &wr_ptr[len..];
                         });
                     }
+                    */
                 }
             }
         }
     });
-}
-
-fn serial_write(cs: &cortex_m::interrupt::CriticalSection, data: &[u8]) -> Result<usize, UsbError> {
-    USB_SERIAL
-        .borrow(cs)
-        .borrow_mut()
-        .as_mut()
-        .unwrap()
-        .write(data)
-}
-
-fn serial_read(
-    cs: &cortex_m::interrupt::CriticalSection,
-    data: &mut [u8],
-) -> Result<usize, UsbError> {
-    USB_SERIAL
-        .borrow(cs)
-        .borrow_mut()
-        .as_mut()
-        .unwrap()
-        .read(data)
 }

@@ -18,7 +18,7 @@ defmt-rtt = "0.3.0"
 panic-halt = { version = "0.2.0"}
 
 #rp2040-hal = { git = "https://github.com/rp-rs/rp-hal", branch="main", features=["rt"] }
-rp2040-hal = { version = "0.2.0", features=["rt"] }
+#rp2040-hal = { version = "0.2.0", features=["rt"] }
 
 adafruit_macropad = { git = "https://github.com/rp-rs/rp-hal.git" }
 #rp2040-boot2 = { git = "https://github.com/rp-rs/rp2040-boot2-rs", branch="main" }
