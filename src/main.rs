@@ -5,6 +5,7 @@
 #![no_std]
 #![no_main]
 
+mod logger;
 mod oled_display;
 
 use crate::oled_display::OledDisplay;
@@ -26,6 +27,7 @@ use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::units::Extensions;
+use log::{info, LevelFilter};
 use panic_halt as _;
 use sh1106::{prelude::*, Builder};
 use usb_device::{class_prelude::*, prelude::*};
@@ -38,6 +40,8 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GD25Q64CS;
 static USB_DEVICE: Mutex<RefCell<Option<UsbDevice<UsbBus>>>> = Mutex::new(RefCell::new(None));
 
 static USB_SERIAL: Mutex<RefCell<Option<SerialPort<UsbBus>>>> = Mutex::new(RefCell::new(None));
+
+static LOGGER: logger::MacropadLogger = logger::MacropadLogger;
 
 static OLED_DISPLAY: Mutex<
     RefCell<
@@ -156,12 +160,16 @@ fn main() -> ! {
         OLED_DISPLAY.borrow(cs).replace(Some(oled_display));
     });
 
+    unsafe {
+        // Note (safety): interupts not yet enabled
+        log::set_logger_racy(&LOGGER).unwrap();
+    }
+    log::set_max_level(LevelFilter::Info);
+
     // Enable the USB interrupt
     unsafe {
         pac::NVIC::unmask(rp2040_hal::pac::Interrupt::USBCTRL_IRQ);
     };
-
-    //USB code now running
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
 
@@ -175,6 +183,8 @@ fn main() -> ! {
     });
 
     delay.delay_ms(1000);
+
+    info!("macropad starting");
 
     //Do some example graphics drawing
     cortex_m::interrupt::free(|cs| {
@@ -190,9 +200,7 @@ fn main() -> ! {
 
     loop {
         //Flash the led
-        //oled_display.draw_text("pre fash").unwrap();
         lf.update().unwrap();
-        //oled_display.draw_text("post fash").unwrap();
     }
 }
 
@@ -249,23 +257,8 @@ impl<BP: InputPin<Error = PinE>, LP: OutputPin<Error = PinE>, PinE: core::fmt::D
             self.led_pin.set_high()?;
             self.pressed = true;
 
-            // We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
-            cortex_m::interrupt::free(|cs| {
-                let mut serial_ref = USB_SERIAL.borrow(cs).borrow_mut();
-                let serial = serial_ref.as_mut().unwrap();
-
-                // Now interrupts are disabled, grab the global variable and, if
-                // available, send it a HID report
-                serial.write(b"Hello, World! ").unwrap();
-
-                let mut count_str = [0u8, 64];
-                count_str[0] = (self.count % 10) + 48; //generate asci digits
-                count_str[1] = 0;
-                serial.write(&count_str).unwrap();
-                serial.write(b"\r\n").unwrap()
-            });
-
-            self.count = (self.count + 1) % 10;
+            info!("Button pressed {}", self.count);
+            self.count = self.count + 1;
         } else if self.button_pin.is_high()? {
             self.led_pin.set_low()?;
             self.pressed = false;
@@ -275,18 +268,10 @@ impl<BP: InputPin<Error = PinE>, LP: OutputPin<Error = PinE>, PinE: core::fmt::D
     }
 }
 
-/// This function is called whenever the USB Hardware generates an Interrupt
-/// Request.
-///
-/// We do all our USB work under interrupt, so the main thread can continue on
-/// knowing nothing about USB.
 #[allow(non_snake_case)]
 #[interrupt]
 fn USBCTRL_IRQ() {
     cortex_m::interrupt::free(|cs| {
-        let mut display_ref = OLED_DISPLAY.borrow(cs).borrow_mut();
-        let display = display_ref.as_mut().unwrap();
-
         let mut serial_ref = USB_SERIAL.borrow(cs).borrow_mut();
         let serial = serial_ref.as_mut().unwrap();
 
@@ -301,39 +286,10 @@ fn USBCTRL_IRQ() {
             let mut buf = [0u8; 64];
             match serial.read(&mut buf) {
                 Err(_e) => {
-                    //show_error(_e, &mut oled_display);
-                    // Do nothing
-                }
-                Ok(0) => {
                     // Do nothing
                 }
                 Ok(_count) => {
-                    //oled_display.draw_text("pre write").unwrap();
-                    match serial.write(b".") {
-                        Err(_e) => {} //show_error(e, &mut oled_display),
-                        Ok(_) => {}
-                    }
-
-                    let s = unsafe {
-                        core::str::from_utf8(core::slice::from_raw_parts(buf.as_ptr(), _count))
-                    };
-                    display.draw_text(s.unwrap()).unwrap();
-
-                    //oled_display.draw_text("post write").unwrap();
-
-                    /*
-                    // Convert to upper case
-                    buf.iter_mut().take(count).for_each(|b| {
-                        b.make_ascii_uppercase();
-                    });
-                    // Send back to the host
-                    let mut wr_ptr = &buf[..count];
-                    while !wr_ptr.is_empty() {
-                        let _ = serial.write(wr_ptr).map(|len| {
-                            wr_ptr = &wr_ptr[len..];
-                        });
-                    }
-                    */
+                    // Do nothing
                 }
             }
         }
