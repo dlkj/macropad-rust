@@ -15,7 +15,9 @@ use adafruit_macropad::{
         self as rp2040_hal,
         clocks::Clock,
         pac::{self, interrupt},
+        pio::PIOExt,
         sio::Sio,
+        timer::Timer,
         usb::UsbBus,
         watchdog::Watchdog,
     },
@@ -26,12 +28,16 @@ use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::prelude::*;
+use embedded_time::duration::Extensions;
 use embedded_time::fixed_point::FixedPoint;
-use embedded_time::rate::units::Extensions;
+use embedded_time::rate::Hertz;
 use log::{info, LevelFilter};
 use sh1106::{prelude::*, Builder};
+use smart_leds::{brightness, SmartLedsWrite, RGB8};
 use usb_device::{class_prelude::*, prelude::*};
 use usbd_serial::SerialPort;
+use ws2812_pio::Ws2812;
 
 #[link_section = ".boot2"]
 #[used]
@@ -83,12 +89,25 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
+    let timer = Timer::new(pac.TIMER, &mut pac.RESETS);
+
     let sio = Sio::new(pac.SIO);
     let pins = Pins::new(
         pac.IO_BANK0,
         pac.PADS_BANK0,
         sio.gpio_bank0,
         &mut pac.RESETS,
+    );
+
+    let neopixel_pin = pins.neopixel.into_mode();
+
+    let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
+    let mut ws = Ws2812::new(
+        neopixel_pin,
+        &mut pio,
+        sm0,
+        clocks.peripheral_clock.freq(),
+        timer.count_down(),
     );
 
     // These are implicitly used by the spi driver if they are in the correct mode
@@ -109,7 +128,7 @@ fn main() -> ! {
     let oled_spi = spi.init(
         &mut pac.RESETS,
         clocks.peripheral_clock.freq(),
-        16_000_000u32.Hz(),
+        Hertz::new(16_000_000u32),
         &embedded_hal::spi::MODE_0,
     );
 
@@ -198,9 +217,24 @@ fn main() -> ! {
 
     let mut lf = LedFlasher::new(button_pin, led_pin);
 
+    let mut n: u8 = 128;
+
+    let mut neopixel_countdown = timer.count_down();
+    neopixel_countdown.start(25.milliseconds());
+
     loop {
         //Flash the led
         lf.update().unwrap();
+
+        match neopixel_countdown.wait() {
+            Ok(_) => {
+                ws.write(brightness(itertools::repeat_n(wheel(n), 12), 32))
+                    .unwrap();
+                n = n.wrapping_add(1);
+                neopixel_countdown.start(25.milliseconds())
+            }
+            Err(_) => {}
+        }
     }
 }
 
@@ -258,13 +292,32 @@ impl<BP: InputPin<Error = PinE>, LP: OutputPin<Error = PinE>, PinE: core::fmt::D
             self.pressed = true;
 
             info!("Button pressed {}", self.count);
-            self.count = self.count + 1;
+            self.count = self.count.wrapping_add(1);
         } else if self.button_pin.is_high()? {
             self.led_pin.set_low()?;
             self.pressed = false;
         }
 
         Ok(())
+    }
+}
+
+/// Convert a number from `0..=255` to an RGB color triplet.
+///
+/// The colours are a transition from red, to green, to blue and back to red.
+fn wheel(mut wheel_pos: u8) -> RGB8 {
+    wheel_pos = 255 - wheel_pos;
+    if wheel_pos < 85 {
+        // No green in this sector - red and blue only
+        (255 - (wheel_pos * 3), 0, wheel_pos * 3).into()
+    } else if wheel_pos < 170 {
+        // No red in this sector - green and blue only
+        wheel_pos -= 85;
+        (0, wheel_pos * 3, 255 - (wheel_pos * 3)).into()
+    } else {
+        // No blue in this sector - red and green only
+        wheel_pos -= 170;
+        (wheel_pos * 3, 255 - (wheel_pos * 3), 0).into()
     }
 }
 
