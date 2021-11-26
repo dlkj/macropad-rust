@@ -8,6 +8,11 @@ use embedded_graphics::{
     },
     text::{Alignment, Text},
 };
+use embedded_text::{
+    alignment::HorizontalAlignment,
+    style::{HeightMode, TextBoxStyleBuilder},
+    TextBox,
+};
 use sh1106::interface::DisplayInterface;
 use sh1106::prelude::GraphicsMode;
 
@@ -36,12 +41,17 @@ impl<DI: DisplayInterface> OledDisplay<DI> {
         Ok(())
     }
 
-    pub fn draw_text(&mut self, text: &str) -> Result<(), DI::Error> {
+    pub fn draw_text_screen(&mut self, text: &str) -> Result<(), DI::Error> {
         self.display.clear();
         let character_style = MonoTextStyle::new(&FONT_4X6, BinaryColor::On);
-        Text::with_alignment(text, Point::new(0, 6), character_style, Alignment::Left)
-            .draw(&mut self.display)
-            .unwrap();
+        let textbox_style = TextBoxStyleBuilder::new()
+            .height_mode(HeightMode::FitToText)
+            .alignment(HorizontalAlignment::Left)
+            .build();
+        let bounds = Rectangle::new(Point::zero(), Size::new(128, 0));
+        let text_box = TextBox::with_textbox_style(text, bounds, character_style, textbox_style);
+
+        text_box.draw(&mut self.display).unwrap();
         self.display.flush()?;
 
         Ok(())

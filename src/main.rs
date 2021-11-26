@@ -7,6 +7,7 @@
 
 mod logger;
 mod oled_display;
+mod panic;
 
 use crate::oled_display::OledDisplay;
 use adafruit_macropad::{
@@ -28,7 +29,6 @@ use embedded_hal::digital::v2::OutputPin;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::units::Extensions;
 use log::{info, LevelFilter};
-use panic_halt as _;
 use sh1106::{prelude::*, Builder};
 use usb_device::{class_prelude::*, prelude::*};
 use usbd_serial::SerialPort;
@@ -182,7 +182,7 @@ fn main() -> ! {
             .unwrap();
     });
 
-    delay.delay_ms(1000);
+    delay.delay_ms(2000);
 
     info!("macropad starting");
 
@@ -210,15 +210,15 @@ where
     E: core::fmt::Debug,
 {
     match e {
-        UsbError::BufferOverflow => oled_display.draw_text("BufferOverflow").unwrap(),
-        UsbError::EndpointMemoryOverflow => {
-            oled_display.draw_text("EndpointMemoryOverflow").unwrap()
-        }
-        UsbError::EndpointOverflow => oled_display.draw_text("EndpointOverflow").unwrap(),
-        UsbError::InvalidEndpoint => oled_display.draw_text("InvalidEndpoint").unwrap(),
-        UsbError::InvalidState => oled_display.draw_text("InvalidState").unwrap(),
-        UsbError::ParseError => oled_display.draw_text("ParseError").unwrap(),
-        UsbError::Unsupported => oled_display.draw_text("Unsupported").unwrap(),
+        UsbError::BufferOverflow => oled_display.draw_text_screen("BufferOverflow").unwrap(),
+        UsbError::EndpointMemoryOverflow => oled_display
+            .draw_text_screen("EndpointMemoryOverflow")
+            .unwrap(),
+        UsbError::EndpointOverflow => oled_display.draw_text_screen("EndpointOverflow").unwrap(),
+        UsbError::InvalidEndpoint => oled_display.draw_text_screen("InvalidEndpoint").unwrap(),
+        UsbError::InvalidState => oled_display.draw_text_screen("InvalidState").unwrap(),
+        UsbError::ParseError => oled_display.draw_text_screen("ParseError").unwrap(),
+        UsbError::Unsupported => oled_display.draw_text_screen("Unsupported").unwrap(),
         UsbError::WouldBlock => {}
     }
 }
