@@ -48,16 +48,16 @@ where
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> Result<(), ()> {
         match self.countdown.wait() {
             Ok(_) => {
                 self.ws
-                    .write(brightness(itertools::repeat_n(wheel(self.n), 12), 32))
-                    .unwrap();
+                    .write(brightness(itertools::repeat_n(wheel(self.n), 12), 32))?;
                 self.n = (self.n + 1) % 768;
             }
             Err(_) => {}
         }
+        Ok(())
     }
 }
 
