@@ -20,7 +20,7 @@ where
 {
     ws: Ws2812<P, SM, C, I>,
     countdown: C,
-    n: u8,
+    n: u16,
     period: Microseconds<u64>,
 }
 
@@ -43,7 +43,7 @@ where
         Neopixels {
             ws,
             countdown,
-            n: 128,
+            n: 0,
             period: p,
         }
     }
@@ -54,7 +54,7 @@ where
                 self.ws
                     .write(brightness(itertools::repeat_n(wheel(self.n), 12), 32))
                     .unwrap();
-                self.n = self.n.wrapping_add(1);
+                self.n = (self.n + 1) % 768;
                 self.countdown.start(self.period);
             }
             Err(_) => {}
@@ -65,18 +65,17 @@ where
 /// Convert a number from `0..=255` to an RGB color triplet.
 ///
 /// The colours are a transition from red, to green, to blue and back to red.
-fn wheel(mut wheel_pos: u8) -> RGB8 {
-    wheel_pos = 255 - wheel_pos;
-    if wheel_pos < 85 {
+fn wheel(mut wheel_pos: u16) -> RGB8 {
+    if wheel_pos < 256 {
         // No green in this sector - red and blue only
-        (255 - (wheel_pos * 3), 0, wheel_pos * 3).into()
-    } else if wheel_pos < 170 {
+        (255 - wheel_pos as u8, 0, wheel_pos as u8).into()
+    } else if wheel_pos < 512 {
         // No red in this sector - green and blue only
-        wheel_pos -= 85;
-        (0, wheel_pos * 3, 255 - (wheel_pos * 3)).into()
+        wheel_pos -= 256;
+        (0, wheel_pos as u8, 255 - wheel_pos as u8).into()
     } else {
         // No blue in this sector - red and green only
-        wheel_pos -= 170;
-        (wheel_pos * 3, 255 - (wheel_pos * 3), 0).into()
+        wheel_pos -= 512;
+        (wheel_pos as u8, 255 - wheel_pos as u8, 0).into()
     }
 }

@@ -110,7 +110,7 @@ fn main() -> ! {
             timer.count_down(),
         );
 
-        neopixel::Neopixels::new(ws, timer.count_down(), 50.milliseconds())
+        neopixel::Neopixels::new(ws, timer.count_down(), 10.milliseconds())
     };
 
     let oled_display = {
