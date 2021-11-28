@@ -6,6 +6,7 @@
 #![no_main]
 
 mod logger;
+mod neopixel;
 mod oled_display;
 mod panic;
 
@@ -28,13 +29,11 @@ use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
-use embedded_hal::prelude::*;
 use embedded_time::duration::Extensions;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Hertz;
 use log::{info, LevelFilter};
 use sh1106::{prelude::*, Builder};
-use smart_leds::{brightness, SmartLedsWrite, RGB8};
 use usb_device::{class_prelude::*, prelude::*};
 use usbd_serial::SerialPort;
 use ws2812_pio::Ws2812;
@@ -99,47 +98,53 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    let neopixel_pin = pins.neopixel.into_mode();
-
     let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
-    let mut ws = Ws2812::new(
-        neopixel_pin,
-        &mut pio,
-        sm0,
-        clocks.peripheral_clock.freq(),
-        timer.count_down(),
-    );
+    let mut neopixel = {
+        let neopixel_pin = pins.neopixel.into_mode();
 
-    // These are implicitly used by the spi driver if they are in the correct mode
-    let _spi_sclk = pins.sclk.into_mode::<rp2040_hal::gpio::FunctionSpi>();
-    let _spi_mosi = pins.mosi.into_mode::<rp2040_hal::gpio::FunctionSpi>();
-    let _spi_miso = pins.miso.into_mode::<rp2040_hal::gpio::FunctionSpi>();
-    let spi = rp2040_hal::spi::Spi::<_, _, 8>::new(pac.SPI1);
+        let ws = Ws2812::new(
+            neopixel_pin,
+            &mut pio,
+            sm0,
+            clocks.peripheral_clock.freq(),
+            timer.count_down(),
+        );
 
-    // Display control pins
-    let oled_dc = pins.oled_dc.into_push_pull_output();
-    let oled_cs = pins.oled_cs.into_push_pull_output();
-    let mut oled_reset = pins.oled_reset.into_push_pull_output();
+        neopixel::Neopixels::new(ws, timer.count_down(), 50.milliseconds())
+    };
 
-    let res = oled_reset.set_high();
-    res.unwrap(); //disable screen reset
+    let oled_display = {
+        // These are implicitly used by the spi driver if they are in the correct mode
+        let _spi_sclk = pins.sclk.into_mode::<rp2040_hal::gpio::FunctionSpi>();
+        let _spi_mosi = pins.mosi.into_mode::<rp2040_hal::gpio::FunctionSpi>();
+        let _spi_miso = pins.miso.into_mode::<rp2040_hal::gpio::FunctionSpi>();
+        let spi = rp2040_hal::spi::Spi::<_, _, 8>::new(pac.SPI1);
 
-    // Exchange the uninitialised SPI driver for an initialised one
-    let oled_spi = spi.init(
-        &mut pac.RESETS,
-        clocks.peripheral_clock.freq(),
-        Hertz::new(16_000_000u32),
-        &embedded_hal::spi::MODE_0,
-    );
+        // Display control pins
+        let oled_dc = pins.oled_dc.into_push_pull_output();
+        let oled_cs = pins.oled_cs.into_push_pull_output();
+        let mut oled_reset = pins.oled_reset.into_push_pull_output();
 
-    let mut display: GraphicsMode<_> = Builder::new()
-        .connect_spi(oled_spi, oled_dc, oled_cs)
-        .into();
+        let res = oled_reset.set_high();
+        res.unwrap(); //disable screen reset
 
-    display.init().unwrap();
-    display.flush().unwrap();
+        // Exchange the uninitialised SPI driver for an initialised one
+        let oled_spi = spi.init(
+            &mut pac.RESETS,
+            clocks.peripheral_clock.freq(),
+            Hertz::new(16_000_000u32),
+            &embedded_hal::spi::MODE_0,
+        );
 
-    let oled_display = OledDisplay::new(display);
+        let mut display: GraphicsMode<_> = Builder::new()
+            .connect_spi(oled_spi, oled_dc, oled_cs)
+            .into();
+
+        display.init().unwrap();
+        display.flush().unwrap();
+
+        OledDisplay::new(display)
+    };
 
     // Set up the USB driver
     let usb_bus = UsbBusAllocator::new(rp2040_hal::usb::UsbBus::new(
@@ -172,7 +177,6 @@ fn main() -> ! {
         .serial_number("TEST")
         .device_class(2) // from: https://www.usb.org/defined-class-codes
         .build();
-
     cortex_m::interrupt::free(|cs| {
         USB_SERIAL.borrow(cs).replace(Some(serial));
         USB_DEVICE.borrow(cs).replace(Some(usb_dev));
@@ -217,24 +221,11 @@ fn main() -> ! {
 
     let mut lf = LedFlasher::new(button_pin, led_pin);
 
-    let mut n: u8 = 128;
-
-    let mut neopixel_countdown = timer.count_down();
-    neopixel_countdown.start(25.milliseconds());
-
     loop {
         //Flash the led
         lf.update().unwrap();
 
-        match neopixel_countdown.wait() {
-            Ok(_) => {
-                ws.write(brightness(itertools::repeat_n(wheel(n), 12), 32))
-                    .unwrap();
-                n = n.wrapping_add(1);
-                neopixel_countdown.start(25.milliseconds())
-            }
-            Err(_) => {}
-        }
+        neopixel.update();
     }
 }
 
@@ -299,25 +290,6 @@ impl<BP: InputPin<Error = PinE>, LP: OutputPin<Error = PinE>, PinE: core::fmt::D
         }
 
         Ok(())
-    }
-}
-
-/// Convert a number from `0..=255` to an RGB color triplet.
-///
-/// The colours are a transition from red, to green, to blue and back to red.
-fn wheel(mut wheel_pos: u8) -> RGB8 {
-    wheel_pos = 255 - wheel_pos;
-    if wheel_pos < 85 {
-        // No green in this sector - red and blue only
-        (255 - (wheel_pos * 3), 0, wheel_pos * 3).into()
-    } else if wheel_pos < 170 {
-        // No red in this sector - green and blue only
-        wheel_pos -= 85;
-        (0, wheel_pos * 3, 255 - (wheel_pos * 3)).into()
-    } else {
-        // No blue in this sector - red and green only
-        wheel_pos -= 170;
-        (wheel_pos * 3, 255 - (wheel_pos * 3), 0).into()
     }
 }
 
