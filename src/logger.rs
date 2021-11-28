@@ -28,7 +28,8 @@ impl log::Log for MacropadLogger {
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
             let mut writer = MacropadLogger;
-            write!(&mut writer, "{} - {}\r\n", record.level(), record.args()).unwrap();
+            //serial port is probabbly not connected, better to swallow failures than panic
+            let _ = write!(&mut writer, "{} - {}\r\n", record.level(), record.args());
         }
     }
 
