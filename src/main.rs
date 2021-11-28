@@ -35,6 +35,8 @@ use embedded_time::rate::Hertz;
 use log::{info, LevelFilter};
 use sh1106::{prelude::*, Builder};
 use usb_device::{class_prelude::*, prelude::*};
+use usbd_hid::descriptor::*;
+use usbd_hid::hid_class::HIDClass;
 use usbd_serial::SerialPort;
 use ws2812_pio::Ws2812;
 
@@ -45,6 +47,11 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GD25Q64CS;
 static USB_DEVICE: Mutex<RefCell<Option<UsbDevice<UsbBus>>>> = Mutex::new(RefCell::new(None));
 
 static USB_SERIAL: Mutex<RefCell<Option<SerialPort<UsbBus>>>> = Mutex::new(RefCell::new(None));
+static USB_KEYBOARD: Mutex<RefCell<Option<HIDClass<UsbBus>>>> = Mutex::new(RefCell::new(None));
+static USB_MOUSE: Mutex<RefCell<Option<HIDClass<UsbBus>>>> = Mutex::new(RefCell::new(None));
+static USB_MEDIA_CONTROL: Mutex<RefCell<Option<HIDClass<UsbBus>>>> = Mutex::new(RefCell::new(None));
+static USB_SYSTEM_CONTROL: Mutex<RefCell<Option<HIDClass<UsbBus>>>> =
+    Mutex::new(RefCell::new(None));
 
 static LOGGER: logger::MacropadLogger = logger::MacropadLogger;
 
@@ -98,8 +105,9 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
+    //init neopixels
     let mut neopixel = {
+        let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
         let neopixel_pin = pins.neopixel.into_mode();
 
         let ws = Ws2812::new(
@@ -113,7 +121,8 @@ fn main() -> ! {
         neopixel::Neopixels::new(ws, timer.count_down(), 10.milliseconds())
     };
 
-    let oled_display = {
+    //init the oled display
+    {
         // These are implicitly used by the spi driver if they are in the correct mode
         let _spi_sclk = pins.sclk.into_mode::<rp2040_hal::gpio::FunctionSpi>();
         let _spi_mosi = pins.mosi.into_mode::<rp2040_hal::gpio::FunctionSpi>();
@@ -143,50 +152,75 @@ fn main() -> ! {
         display.init().unwrap();
         display.flush().unwrap();
 
-        OledDisplay::new(display)
-    };
+        cortex_m::interrupt::free(|cs| {
+            OLED_DISPLAY
+                .borrow(cs)
+                .replace(Some(OledDisplay::new(display)));
+        });
+    }
 
-    // Set up the USB driver
-    let usb_bus = UsbBusAllocator::new(rp2040_hal::usb::UsbBus::new(
-        pac.USBCTRL_REGS,
-        pac.USBCTRL_DPRAM,
-        clocks.usb_clock,
-        true,
-        &mut pac.RESETS,
-    ));
-
+    //Init USB
     static mut USB_BUS: Option<UsbBusAllocator<rp2040_hal::usb::UsbBus>> = None;
 
-    unsafe {
-        // Note (safety): This is safe as interrupts haven't been started yet
-        USB_BUS = Some(usb_bus);
+    {
+        // Set up the USB driver
+        let usb_bus = UsbBusAllocator::new(rp2040_hal::usb::UsbBus::new(
+            pac.USBCTRL_REGS,
+            pac.USBCTRL_DPRAM,
+            clocks.usb_clock,
+            true,
+            &mut pac.RESETS,
+        ));
+
+        cortex_m::interrupt::free(|_cs| unsafe {
+            // Note (safety): This is safe as interrupts are masked
+            USB_BUS = Some(usb_bus);
+        });
     }
 
-    // Grab a reference to the USB Bus allocator. We are promising to the
-    // compiler not to take mutable access to this global variable whilst this
-    // reference exists!
-    let bus_ref = unsafe { USB_BUS.as_ref().unwrap() };
-
-    // Set up the USB Communications Class Device driver
-    let serial = SerialPort::new(bus_ref);
-
-    // Create a USB device with a fake VID and PID
-    let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x16c0, 0x27dd))
-        .manufacturer("Fake company")
-        .product("Serial port")
-        .serial_number("TEST")
-        .device_class(2) // from: https://www.usb.org/defined-class-codes
-        .build();
     cortex_m::interrupt::free(|cs| {
-        USB_SERIAL.borrow(cs).replace(Some(serial));
+        // Note (safety): This is safe as interrupts are masked
+        let bus_ref = unsafe { USB_BUS.as_ref().unwrap() };
+
+        // Set up the USB Communications Class Device driver
+        USB_SERIAL
+            .borrow(cs)
+            .replace(Some(SerialPort::new(bus_ref)));
+
+        // Set up the USB HID Device drivers
+        USB_MOUSE
+            .borrow(cs)
+            .replace(Some(HIDClass::new(bus_ref, MouseReport::desc(), 50)));
+        USB_KEYBOARD
+            .borrow(cs)
+            .replace(Some(HIDClass::new(bus_ref, KeyboardReport::desc(), 50)));
+        USB_MEDIA_CONTROL.borrow(cs).replace(Some(HIDClass::new(
+            bus_ref,
+            MediaKeyboardReport::desc(),
+            50,
+        )));
+        USB_SYSTEM_CONTROL.borrow(cs).replace(Some(HIDClass::new(
+            bus_ref,
+            SystemControlReport::desc(),
+            50,
+        )));
+
+        // Create a USB device with a fake VID and PID
+        let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x16c0, 0x27dd))
+            .manufacturer("Adafruit")
+            .product("Macropad")
+            .serial_number("TEST")
+            .device_class(2) // from: https://www.usb.org/defined-class-codes
+            .build();
+
         USB_DEVICE.borrow(cs).replace(Some(usb_dev));
-        OLED_DISPLAY.borrow(cs).replace(Some(oled_display));
+
+        unsafe {
+            // Note (safety): interupts not yet enabled
+            log::set_logger_racy(&LOGGER).unwrap();
+        }
     });
 
-    unsafe {
-        // Note (safety): interupts not yet enabled
-        log::set_logger_racy(&LOGGER).unwrap();
-    }
     log::set_max_level(LevelFilter::Info);
 
     // Enable the USB interrupt
@@ -222,10 +256,8 @@ fn main() -> ! {
     let mut lf = LedFlasher::new(button_pin, led_pin);
 
     loop {
-        //Flash the led
         lf.update().unwrap();
-
-        neopixel.update();
+        neopixel.update().unwrap();
     }
 }
 
