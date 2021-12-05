@@ -1,43 +1,29 @@
 use embedded_hal::timer::CountDown;
 use embedded_hal::timer::Periodic;
 use embedded_time::duration::*;
-use rp2040_hal::gpio::Function;
-use rp2040_hal::gpio::FunctionConfig;
-use rp2040_hal::gpio::PinId;
-use rp2040_hal::gpio::ValidPinMode;
-use rp2040_hal::pio::PIOExt;
-use rp2040_hal::pio::StateMachineIndex;
 use smart_leds::{brightness, SmartLedsWrite, RGB8};
-use ws2812_pio::Ws2812;
 
-pub struct Neopixels<P, SM, C, T, I>
+pub struct Neopixels<S, C>
 where
-    I: PinId,
-    C: CountDown<Time = T> + Periodic,
-    P: PIOExt + FunctionConfig,
-    Function<P>: ValidPinMode<I>,
-    SM: StateMachineIndex,
-    T: From<Microseconds>,
+    S: SmartLedsWrite,
+    C: CountDown + Periodic,
 {
-    ws: Ws2812<P, SM, C, I>,
+    ws: S,
     countdown: C,
     n: u16,
 }
 
-impl<I: PinId, C: CountDown + Periodic, T, P: PIOExt + FunctionConfig, SM: StateMachineIndex>
-    Neopixels<P, SM, C, T, I>
+impl<S, C> Neopixels<S, C>
 where
-    Function<P>: ValidPinMode<I>,
-    C: CountDown<Time = T>,
-    T: From<Microseconds>,
+    S: SmartLedsWrite,
+    C: CountDown + Periodic,
+    (): core::convert::From<S::Error>,
 {
-    pub fn new<CP>(
-        ws: Ws2812<P, SM, C, I>,
-        mut countdown: C,
-        period: CP,
-    ) -> Neopixels<P, SM, C, T, I>
+    pub fn new<T, P>(ws: S, mut countdown: C, period: P) -> Neopixels<S, C>
     where
-        CP: Into<T>,
+        C: CountDown<Time = T>,
+        T: From<Microseconds>,
+        P: Into<T>,
     {
         let p = period.into();
         countdown.start(p);
@@ -48,7 +34,11 @@ where
         }
     }
 
-    pub fn update(&mut self) -> Result<(), ()> {
+    pub fn update<E>(&mut self) -> Result<(), E>
+    where
+        S::Color: From<RGB8>,
+        S: SmartLedsWrite<Error = E>,
+    {
         match self.countdown.wait() {
             Ok(_) => {
                 self.ws

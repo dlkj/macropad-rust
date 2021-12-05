@@ -7,13 +7,11 @@ use embedded_hal::timer::Periodic;
 use embedded_time::duration::*;
 use log::info;
 
-pub struct Macropad<BP, LP, PinE, C, T>
+pub struct Macropad<BP, LP, C>
 where
-    BP: InputPin<Error = PinE>,
-    LP: OutputPin<Error = PinE>,
-    PinE: core::fmt::Debug,
-    C: CountDown<Time = T> + Periodic,
-    T: From<Milliseconds>,
+    BP: InputPin,
+    LP: OutputPin,
+    C: CountDown + Periodic,
 {
     count: u8,
     pressed: bool,
@@ -22,19 +20,11 @@ where
     countdown: C,
 }
 
-impl<
-        BP: InputPin<Error = PinE>,
-        LP: OutputPin<Error = PinE>,
-        PinE: core::fmt::Debug,
-        C: CountDown<Time = T> + Periodic,
-        T: From<Milliseconds>,
-    > Macropad<BP, LP, PinE, C, T>
-{
-    pub fn new(button_pin: BP, led_pin: LP, mut countdown: C) -> Macropad<BP, LP, PinE, C, T>
+impl<BP: InputPin, LP: OutputPin, C: CountDown + Periodic> Macropad<BP, LP, C> {
+    pub fn new<T>(button_pin: BP, led_pin: LP, mut countdown: C) -> Macropad<BP, LP, C>
     where
-        BP: InputPin<Error = PinE>,
-        LP: OutputPin<Error = PinE>,
-        PinE: core::fmt::Debug,
+        BP: InputPin,
+        LP: OutputPin,
         C: CountDown<Time = T>,
         T: From<Milliseconds>,
     {
@@ -49,7 +39,11 @@ impl<
         }
     }
 
-    pub fn update(&mut self) -> Result<(), PinE> {
+    pub fn update<PinE>(&mut self) -> Result<(), PinE>
+    where
+        BP: InputPin<Error = PinE>,
+        LP: OutputPin<Error = PinE>,
+    {
         if self.button_pin.is_low()? && !self.pressed {
             self.led_pin.set_high()?;
             self.pressed = true;
