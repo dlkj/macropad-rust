@@ -3,26 +3,20 @@ use embedded_hal::timer::Periodic;
 use embedded_time::duration::*;
 use smart_leds::{brightness, SmartLedsWrite, RGB8};
 
-pub struct Neopixels<S, C>
-where
-    S: SmartLedsWrite,
-    C: CountDown + Periodic,
-{
+pub struct Neopixels<S, C> {
     ws: S,
     countdown: C,
     n: u16,
 }
 
-impl<S, C> Neopixels<S, C>
+impl<S, E, C, T> Neopixels<S, C>
 where
-    S: SmartLedsWrite,
-    C: CountDown + Periodic,
-    (): core::convert::From<S::Error>,
+    S: SmartLedsWrite<Error = E>,
+    C: CountDown<Time = T> + Periodic,
+    T: From<Microseconds>,
 {
-    pub fn new<T, P>(ws: S, mut countdown: C, period: P) -> Neopixels<S, C>
+    pub fn new<P>(ws: S, mut countdown: C, period: P) -> Neopixels<S, C>
     where
-        C: CountDown<Time = T>,
-        T: From<Microseconds>,
         P: Into<T>,
     {
         let p = period.into();
@@ -34,10 +28,10 @@ where
         }
     }
 
-    pub fn update<E>(&mut self) -> Result<(), E>
+    pub fn update(&mut self) -> Result<(), E>
     where
         S::Color: From<RGB8>,
-        S: SmartLedsWrite<Error = E>,
+        S: SmartLedsWrite,
     {
         match self.countdown.wait() {
             Ok(_) => {
