@@ -6,6 +6,7 @@
 #![no_main]
 
 mod logger;
+mod macropad;
 mod neopixel;
 mod oled_display;
 mod panic;
@@ -27,7 +28,6 @@ use adafruit_macropad::{
 use core::cell::RefCell;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
-use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_time::duration::Extensions;
 use embedded_time::fixed_point::FixedPoint;
@@ -35,7 +35,8 @@ use embedded_time::rate::Hertz;
 use log::{info, LevelFilter};
 use sh1106::{prelude::*, Builder};
 use usb_device::{class_prelude::*, prelude::*};
-use usbd_hid::descriptor::*;
+use usbd_hid::descriptor::KeyboardReport;
+use usbd_hid::descriptor::SerializedDescriptor;
 use usbd_hid::hid_class::HIDClass;
 use usbd_serial::SerialPort;
 use ws2812_pio::Ws2812;
@@ -48,10 +49,6 @@ static USB_DEVICE: Mutex<RefCell<Option<UsbDevice<UsbBus>>>> = Mutex::new(RefCel
 
 static USB_SERIAL: Mutex<RefCell<Option<SerialPort<UsbBus>>>> = Mutex::new(RefCell::new(None));
 static USB_KEYBOARD: Mutex<RefCell<Option<HIDClass<UsbBus>>>> = Mutex::new(RefCell::new(None));
-static USB_MOUSE: Mutex<RefCell<Option<HIDClass<UsbBus>>>> = Mutex::new(RefCell::new(None));
-static USB_MEDIA_CONTROL: Mutex<RefCell<Option<HIDClass<UsbBus>>>> = Mutex::new(RefCell::new(None));
-static USB_SYSTEM_CONTROL: Mutex<RefCell<Option<HIDClass<UsbBus>>>> =
-    Mutex::new(RefCell::new(None));
 
 static LOGGER: logger::MacropadLogger = logger::MacropadLogger;
 
@@ -188,29 +185,16 @@ fn main() -> ! {
             .replace(Some(SerialPort::new(bus_ref)));
 
         // Set up the USB HID Device drivers
-        USB_MOUSE
-            .borrow(cs)
-            .replace(Some(HIDClass::new(bus_ref, MouseReport::desc(), 50)));
         USB_KEYBOARD
             .borrow(cs)
             .replace(Some(HIDClass::new(bus_ref, KeyboardReport::desc(), 50)));
-        USB_MEDIA_CONTROL.borrow(cs).replace(Some(HIDClass::new(
-            bus_ref,
-            MediaKeyboardReport::desc(),
-            50,
-        )));
-        USB_SYSTEM_CONTROL.borrow(cs).replace(Some(HIDClass::new(
-            bus_ref,
-            SystemControlReport::desc(),
-            50,
-        )));
 
         // Create a USB device with a fake VID and PID
         let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x16c0, 0x27dd))
             .manufacturer("Adafruit")
             .product("Macropad")
             .serial_number("TEST")
-            .device_class(2) // from: https://www.usb.org/defined-class-codes
+            .device_class(0x00) // from: https://www.usb.org/defined-class-codes
             .build();
 
         USB_DEVICE.borrow(cs).replace(Some(usb_dev));
@@ -253,75 +237,11 @@ fn main() -> ! {
     let led_pin = pins.led.into_push_pull_output();
     let button_pin = pins.button.into_pull_down_input();
 
-    let mut lf = LedFlasher::new(button_pin, led_pin);
+    let mut mp = macropad::Macropad::new(button_pin, led_pin, timer.count_down());
 
     loop {
-        lf.update().unwrap();
+        mp.update().unwrap();
         neopixel.update().unwrap();
-    }
-}
-
-fn _show_error<DI, E>(e: UsbError, oled_display: &mut OledDisplay<DI>) -> ()
-where
-    DI: sh1106::interface::DisplayInterface<Error = E>,
-    E: core::fmt::Debug,
-{
-    match e {
-        UsbError::BufferOverflow => oled_display.draw_text_screen("BufferOverflow").unwrap(),
-        UsbError::EndpointMemoryOverflow => oled_display
-            .draw_text_screen("EndpointMemoryOverflow")
-            .unwrap(),
-        UsbError::EndpointOverflow => oled_display.draw_text_screen("EndpointOverflow").unwrap(),
-        UsbError::InvalidEndpoint => oled_display.draw_text_screen("InvalidEndpoint").unwrap(),
-        UsbError::InvalidState => oled_display.draw_text_screen("InvalidState").unwrap(),
-        UsbError::ParseError => oled_display.draw_text_screen("ParseError").unwrap(),
-        UsbError::Unsupported => oled_display.draw_text_screen("Unsupported").unwrap(),
-        UsbError::WouldBlock => {}
-    }
-}
-
-struct LedFlasher<BP, LP, PinE>
-where
-    BP: InputPin<Error = PinE>,
-    LP: OutputPin<Error = PinE>,
-    PinE: core::fmt::Debug,
-{
-    count: u8,
-    pressed: bool,
-    button_pin: BP,
-    led_pin: LP,
-}
-
-impl<BP: InputPin<Error = PinE>, LP: OutputPin<Error = PinE>, PinE: core::fmt::Debug>
-    LedFlasher<BP, LP, PinE>
-{
-    fn new(button_pin: BP, led_pin: LP) -> LedFlasher<BP, LP, PinE>
-    where
-        BP: InputPin<Error = PinE>,
-        LP: OutputPin<Error = PinE>,
-        PinE: core::fmt::Debug,
-    {
-        LedFlasher {
-            count: 0,
-            pressed: false,
-            button_pin,
-            led_pin,
-        }
-    }
-
-    fn update(&mut self) -> Result<(), PinE> {
-        if self.button_pin.is_low()? && !self.pressed {
-            self.led_pin.set_high()?;
-            self.pressed = true;
-
-            info!("Button pressed {}", self.count);
-            self.count = self.count.wrapping_add(1);
-        } else if self.button_pin.is_high()? {
-            self.led_pin.set_low()?;
-            self.pressed = false;
-        }
-
-        Ok(())
     }
 }
 
@@ -332,22 +252,27 @@ fn USBCTRL_IRQ() {
         let mut serial_ref = USB_SERIAL.borrow(cs).borrow_mut();
         let serial = serial_ref.as_mut().unwrap();
 
+        let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
+        let keyboard = keyboard_ref.as_mut().unwrap();
+
         // Poll the USB driver with all of our supported USB Classes
         if USB_DEVICE
             .borrow(cs)
             .borrow_mut()
             .as_mut()
             .unwrap()
-            .poll(&mut [serial])
+            .poll(&mut [serial, keyboard])
         {
             let mut buf = [0u8; 64];
             match serial.read(&mut buf) {
-                Err(_e) => {
-                    // Do nothing
-                }
-                Ok(_count) => {
-                    // Do nothing
-                }
+                Err(_e) => {}
+                Ok(_count) => {}
+            }
+
+            let mut buf = [0u8; 64];
+            match keyboard.pull_raw_output(&mut buf) {
+                Err(_e) => {}
+                Ok(_count) => {}
             }
         }
     });
