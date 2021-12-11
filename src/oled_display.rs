@@ -57,6 +57,10 @@ impl<DI: DisplayInterface> OledDisplay<DI> {
         Ok(())
     }
 
+    pub fn draw_numpad(&mut self) -> Result<(), DI::Error> {
+        self.draw_text_screen("7 8 9\n4 5 6\n1 2 3\n0 . E")
+    }
+
     pub fn draw_test(&mut self) -> Result<(), DI::Error> {
         self.display.clear();
 

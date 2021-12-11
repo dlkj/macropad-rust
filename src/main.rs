@@ -29,6 +29,7 @@ use core::cell::RefCell;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
 use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::prelude::*;
 use embedded_time::duration::Extensions;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Hertz;
@@ -115,7 +116,7 @@ fn main() -> ! {
             timer.count_down(),
         );
 
-        neopixel::Neopixels::new(ws, timer.count_down(), 10.milliseconds())
+        neopixel::Neopixels::new(ws)
     };
 
     //init the oled display
@@ -234,14 +235,60 @@ fn main() -> ! {
         oled_display.draw_test().unwrap();
     });
 
-    let led_pin = pins.led.into_push_pull_output();
-    let button_pin = pins.button.into_pull_down_input();
+    let key1 = pins.key1.into_pull_up_input();
+    let key2 = pins.key2.into_pull_up_input();
+    let key3 = pins.key3.into_pull_up_input();
+    let key4 = pins.key4.into_pull_up_input();
+    let key5 = pins.key5.into_pull_up_input();
+    let key6 = pins.key6.into_pull_up_input();
+    let key7 = pins.key7.into_pull_up_input();
+    let key8 = pins.key8.into_pull_up_input();
+    let key9 = pins.key9.into_pull_up_input();
+    let key10 = pins.key10.into_pull_up_input();
+    let key11 = pins.key11.into_pull_up_input();
+    let key12 = pins.key12.into_pull_up_input();
 
-    let mut mp = macropad::Macropad::new(button_pin, led_pin, timer.count_down());
+    let mp = macropad::Macropad::new(
+        key1, key2, key3, key4, key5, key6, key7, key8, key9, key10, key11, key12,
+    );
+
+    // let mut fast_countdown = timer.count_down();
+    // fast_countdown.start(1.milliseconds());
+
+    let mut slow_countdown = timer.count_down();
+    slow_countdown.start(10.milliseconds());
 
     loop {
-        mp.update().unwrap();
-        neopixel.update().unwrap();
+        //1ms scan the keys and debounce
+
+        //10ms
+        if let Ok(_) = slow_countdown.wait() {
+            //get the current keypresses and send to usb
+            let keycodes = mp.get_keycodes();
+
+            cortex_m::interrupt::free(|cs| {
+                let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
+                if let Some(keyboard) = keyboard_ref.as_mut() {
+                    let _ = keyboard.push_input(&KeyboardReport {
+                        modifier: 0,
+                        leds: 0,
+                        reserved: 0,
+                        keycodes,
+                    });
+                }
+            });
+
+            //update the screen
+            cortex_m::interrupt::free(|cs| {
+                let mut oled_display_ref = OLED_DISPLAY.borrow(cs).borrow_mut();
+                if let Some(oled_display) = oled_display_ref.as_mut() {
+                    oled_display.draw_numpad().unwrap();
+                }
+            });
+
+            //update the LEDs
+            neopixel.update().unwrap();
+        }
     }
 }
 

@@ -1,75 +1,169 @@
-use crate::KeyboardReport;
-use crate::USB_KEYBOARD;
 use embedded_hal::digital::v2::InputPin;
-use embedded_hal::digital::v2::OutputPin;
-use embedded_hal::timer::CountDown;
-use embedded_hal::timer::Periodic;
-use embedded_time::duration::*;
-use log::info;
 
-pub struct Macropad<BP, LP, C> {
-    count: u8,
-    pressed: bool,
-    button_pin: BP,
-    led_pin: LP,
-    countdown: C,
+pub struct Macropad<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12> {
+    key1: K1,
+    key2: K2,
+    key3: K3,
+    key4: K4,
+    key5: K5,
+    key6: K6,
+    key7: K7,
+    key8: K8,
+    key9: K9,
+    key10: K10,
+    key11: K11,
+    key12: K12,
 }
 
-impl<BP, LP, C, T, PinE> Macropad<BP, LP, C>
+impl<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12, PinE>
+    Macropad<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12>
 where
-    BP: InputPin<Error = PinE>,
-    LP: OutputPin<Error = PinE>,
-    C: CountDown<Time = T> + Periodic,
-    T: From<Milliseconds>,
+    K1: InputPin<Error = PinE>,
+    K2: InputPin<Error = PinE>,
+    K3: InputPin<Error = PinE>,
+    K4: InputPin<Error = PinE>,
+    K5: InputPin<Error = PinE>,
+    K6: InputPin<Error = PinE>,
+    K7: InputPin<Error = PinE>,
+    K8: InputPin<Error = PinE>,
+    K9: InputPin<Error = PinE>,
+    K10: InputPin<Error = PinE>,
+    K11: InputPin<Error = PinE>,
+    K12: InputPin<Error = PinE>,
+    PinE: core::fmt::Debug,
 {
-    pub fn new(button_pin: BP, led_pin: LP, mut countdown: C) -> Macropad<BP, LP, C> {
-        countdown.start(10.milliseconds());
-
+    pub fn new(
+        key1: K1,
+        key2: K2,
+        key3: K3,
+        key4: K4,
+        key5: K5,
+        key6: K6,
+        key7: K7,
+        key8: K8,
+        key9: K9,
+        key10: K10,
+        key11: K11,
+        key12: K12,
+    ) -> Macropad<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12> {
         Macropad {
-            count: 0,
-            pressed: false,
-            button_pin,
-            led_pin,
-            countdown,
+            key1,
+            key2,
+            key3,
+            key4,
+            key5,
+            key6,
+            key7,
+            key8,
+            key9,
+            key10,
+            key11,
+            key12,
         }
     }
 
-    pub fn update(&mut self) -> Result<(), PinE> {
-        if self.button_pin.is_low()? && !self.pressed {
-            self.led_pin.set_high()?;
-            self.pressed = true;
+    pub fn get_keycodes(&self) -> [u8; 6] {
+        let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
 
-            info!("Button pressed {}", self.count);
-            self.count = self.count.wrapping_add(1);
-        } else if self.button_pin.is_high()? {
-            self.led_pin.set_low()?;
-            self.pressed = false;
-        }
+        let mut k_it = keycodes.iter_mut();
 
-        match self.countdown.wait() {
-            Ok(_) => cortex_m::interrupt::free(|cs| {
-                let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
-                let keyboard = keyboard_ref.as_mut().unwrap();
-
-                if self.button_pin.is_low()? {
-                    let _ = keyboard.push_input(&KeyboardReport {
-                        modifier: 0,
-                        leds: 0,
-                        reserved: 0,
-                        keycodes: [0x04, 0, 0, 0, 0, 0], //a
-                    });
+        k_it.next()
+            .and_then(|k| {
+                if self.key1.is_low().unwrap() {
+                    *k = 0x5f; //Numpad 7
+                    k_it.next()
                 } else {
-                    let _ = keyboard.push_input(&KeyboardReport {
-                        modifier: 0,
-                        leds: 0,
-                        reserved: 0,
-                        keycodes: [0, 0, 0, 0, 0, 0],
-                    });
+                    Some(k)
                 }
-
-                Ok(())
-            }),
-            Err(_) => Ok(()),
-        }
+            })
+            .and_then(|k| {
+                if self.key2.is_low().unwrap() {
+                    *k = 0x60; //Numpad 8
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key3.is_low().unwrap() {
+                    *k = 0x61; //Numpad 9
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key4.is_low().unwrap() {
+                    *k = 0x5c; //Numpad 4
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key5.is_low().unwrap() {
+                    *k = 0x5d; //Numpad 5
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key6.is_low().unwrap() {
+                    *k = 0x5e; //Numpad 6
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key7.is_low().unwrap() {
+                    *k = 0x59; //Numpad 1
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key8.is_low().unwrap() {
+                    *k = 0x5a; //Numpad 2
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key9.is_low().unwrap() {
+                    *k = 0x5b; //Numpad 3
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key10.is_low().unwrap() {
+                    *k = 0x62; //Numpad 0
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key11.is_low().unwrap() {
+                    *k = 0x63; //Numpad .
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            })
+            .and_then(|k| {
+                if self.key12.is_low().unwrap() {
+                    *k = 0x58; //Numpad enter
+                    k_it.next()
+                } else {
+                    Some(k)
+                }
+            });
+        return keycodes;
     }
 }
