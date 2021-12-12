@@ -1,6 +1,6 @@
 [package]
 authors = ["Daniel KJ"]
-edition = "2018"
+edition = "2021"
 readme = "README.md"
 name = "macropad-rust"
 version = "0.1.0"
