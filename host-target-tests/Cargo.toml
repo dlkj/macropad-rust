@@ -1,0 +1,8 @@
+[package]
+authors = ["Daniel KJ"]
+edition = "2021"
+name = "host-target-tests"
+publish = false
+version = "0.1.0"
+
+[dev-dependencies]
