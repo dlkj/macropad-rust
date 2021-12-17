@@ -90,7 +90,7 @@ fn main() -> ! {
     );
 
     //init neopixels
-    let mut neopixel = {
+    let mut neopixel: neopixel::Neopixels<_, 12> = {
         let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
         let neopixel_pin = pins.neopixel.into_mode();
 
@@ -236,11 +236,7 @@ fn main() -> ! {
         pins.key12.into_pull_up_input().into(),
     ];
 
-    //keypad, final row: '0', '.', 'enter'
-    const KEY_MAP: [u8; 12] = [
-        0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
-    ];
-    let mut mp = macropad::Macropad::new(keys, KEY_MAP);
+    let mut mp = macropad::Macropad::new(keys);
 
     let mut fast_countdown = timer.count_down();
     fast_countdown.start(1.milliseconds());
@@ -256,10 +252,22 @@ fn main() -> ! {
 
         //10ms
         if slow_countdown.wait().is_ok() {
+            let keys = mp.get_keys();
+
             //get first 6 current keypresses and send to usb
             let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
-            for (i, code) in mp.get_keycodes().iter().take(keycodes.len()).enumerate() {
-                keycodes[i] = *code;
+
+            if keys.len() > keycodes.len() {
+                keycodes.fill(0x01); //Error roll over
+            } else {
+                //keypad, final row: '0', '.', 'enter'
+                const KEY_MAP: [u8; 12] = [
+                    0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
+                ];
+
+                for (i, k) in keys.iter().enumerate() {
+                    keycodes[i] = KEY_MAP[*k];
+                }
             }
 
             cortex_m::interrupt::free(|cs| {
@@ -283,7 +291,7 @@ fn main() -> ! {
             });
 
             //update the LEDs
-            neopixel.update().unwrap();
+            neopixel.update(&keys).unwrap();
         }
     }
 }
