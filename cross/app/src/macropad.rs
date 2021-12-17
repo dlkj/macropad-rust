@@ -1,185 +1,34 @@
 use embedded_hal::digital::v2::InputPin;
 
-pub struct Macropad<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12> {
-    key1: debounce::DebouncedPin<K1>,
-    key2: debounce::DebouncedPin<K2>,
-    key3: debounce::DebouncedPin<K3>,
-    key4: debounce::DebouncedPin<K4>,
-    key5: debounce::DebouncedPin<K5>,
-    key6: debounce::DebouncedPin<K6>,
-    key7: debounce::DebouncedPin<K7>,
-    key8: debounce::DebouncedPin<K8>,
-    key9: debounce::DebouncedPin<K9>,
-    key10: debounce::DebouncedPin<K10>,
-    key11: debounce::DebouncedPin<K11>,
-    key12: debounce::DebouncedPin<K12>,
+pub struct Macropad<I> {
+    keys: [debounce::DebouncedPin<I>; 12],
+    key_map: [u8; 12],
 }
 
-impl<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12, PinE>
-    Macropad<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12>
+impl<I, PinE> Macropad<I>
 where
-    K1: InputPin<Error = PinE>,
-    K2: InputPin<Error = PinE>,
-    K3: InputPin<Error = PinE>,
-    K4: InputPin<Error = PinE>,
-    K5: InputPin<Error = PinE>,
-    K6: InputPin<Error = PinE>,
-    K7: InputPin<Error = PinE>,
-    K8: InputPin<Error = PinE>,
-    K9: InputPin<Error = PinE>,
-    K10: InputPin<Error = PinE>,
-    K11: InputPin<Error = PinE>,
-    K12: InputPin<Error = PinE>,
+    I: InputPin<Error = PinE>,
     PinE: core::fmt::Debug,
 {
-    pub fn new(
-        key1: K1,
-        key2: K2,
-        key3: K3,
-        key4: K4,
-        key5: K5,
-        key6: K6,
-        key7: K7,
-        key8: K8,
-        key9: K9,
-        key10: K10,
-        key11: K11,
-        key12: K12,
-    ) -> Macropad<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12> {
+    pub fn new(keys: [I; 12], key_map: [u8; 12]) -> Macropad<I> {
         Macropad {
-            key1: debounce::DebouncedPin::new(key1, true),
-            key2: debounce::DebouncedPin::new(key2, true),
-            key3: debounce::DebouncedPin::new(key3, true),
-            key4: debounce::DebouncedPin::new(key4, true),
-            key5: debounce::DebouncedPin::new(key5, true),
-            key6: debounce::DebouncedPin::new(key6, true),
-            key7: debounce::DebouncedPin::new(key7, true),
-            key8: debounce::DebouncedPin::new(key8, true),
-            key9: debounce::DebouncedPin::new(key9, true),
-            key10: debounce::DebouncedPin::new(key10, true),
-            key11: debounce::DebouncedPin::new(key11, true),
-            key12: debounce::DebouncedPin::new(key12, true),
+            keys: keys.map(|p| debounce::DebouncedPin::new(p, true)),
+            key_map,
         }
     }
 
-    pub fn get_keycodes(&self) -> [u8; 6] {
-        let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
-
-        let mut k_it = keycodes.iter_mut();
-
-        k_it.next()
-            .and_then(|k| {
-                if self.key1.is_low().unwrap() {
-                    *k = 0x5f; //Numpad 7
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key2.is_low().unwrap() {
-                    *k = 0x60; //Numpad 8
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key3.is_low().unwrap() {
-                    *k = 0x61; //Numpad 9
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key4.is_low().unwrap() {
-                    *k = 0x5c; //Numpad 4
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key5.is_low().unwrap() {
-                    *k = 0x5d; //Numpad 5
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key6.is_low().unwrap() {
-                    *k = 0x5e; //Numpad 6
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key7.is_low().unwrap() {
-                    *k = 0x59; //Numpad 1
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key8.is_low().unwrap() {
-                    *k = 0x5a; //Numpad 2
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key9.is_low().unwrap() {
-                    *k = 0x5b; //Numpad 3
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key10.is_low().unwrap() {
-                    *k = 0x62; //Numpad 0
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key11.is_low().unwrap() {
-                    *k = 0x63; //Numpad .
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            })
-            .and_then(|k| {
-                if self.key12.is_low().unwrap() {
-                    *k = 0x58; //Numpad enter
-                    k_it.next()
-                } else {
-                    Some(k)
-                }
-            });
-        keycodes
+    pub fn get_keycodes(&self) -> arrayvec::ArrayVec<u8, 12> {
+        self.keys
+            .iter()
+            .zip(self.key_map.iter())
+            .flat_map(|(p, k)| p.is_low().ok().and_then(|v| v.then(|| *k)))
+            .collect()
     }
 
     pub fn update(&mut self) -> Result<(), PinE> {
-        self.key1.update()?;
-        self.key2.update()?;
-        self.key3.update()?;
-        self.key4.update()?;
-        self.key5.update()?;
-        self.key6.update()?;
-        self.key7.update()?;
-        self.key8.update()?;
-        self.key9.update()?;
-        self.key10.update()?;
-        self.key11.update()?;
-        self.key12.update()?;
+        for k in &mut self.keys {
+            k.update()?;
+        }
         Ok(())
     }
 }

@@ -12,7 +12,6 @@ mod neopixel;
 mod oled_display;
 mod panic;
 
-use crate::oled_display::OledDisplay;
 use adafruit_macropad::{
     hal::{
         self as rp2040_hal,
@@ -35,6 +34,7 @@ use embedded_time::duration::Extensions;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Hertz;
 use log::{info, LevelFilter};
+use rp2040_hal::gpio::dynpin::DynPin;
 use sh1106::{prelude::*, Builder};
 use usb_device::{class_prelude::*, prelude::*};
 use usbd_hid::descriptor::KeyboardReport;
@@ -47,6 +47,9 @@ use ws2812_pio::Ws2812;
 #[used]
 pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GD25Q64CS;
 
+type Spi = rp2040_hal::spi::Spi<rp2040_hal::spi::Enabled, rp2040_hal::pac::SPI1, 8_u8>;
+type OledDisplay = oled_display::OledDisplay<sh1106::interface::SpiInterface<Spi, DynPin, DynPin>>;
+
 static USB_DEVICE: Mutex<RefCell<Option<UsbDevice<UsbBus>>>> = Mutex::new(RefCell::new(None));
 
 static USB_SERIAL: Mutex<RefCell<Option<SerialPort<UsbBus>>>> = Mutex::new(RefCell::new(None));
@@ -54,25 +57,7 @@ static USB_KEYBOARD: Mutex<RefCell<Option<HIDClass<UsbBus>>>> = Mutex::new(RefCe
 
 static LOGGER: logger::MacropadLogger = logger::MacropadLogger;
 
-static OLED_DISPLAY: Mutex<
-    RefCell<
-        Option<
-            OledDisplay<
-                sh1106::interface::SpiInterface<
-                    rp2040_hal::spi::Spi<rp2040_hal::spi::Enabled, rp2040_hal::pac::SPI1, 8_u8>,
-                    rp2040_hal::gpio::Pin<
-                        rp2040_hal::gpio::bank0::Gpio24,
-                        rp2040_hal::gpio::Output<rp2040_hal::gpio::PushPull>,
-                    >,
-                    rp2040_hal::gpio::Pin<
-                        rp2040_hal::gpio::bank0::Gpio22,
-                        rp2040_hal::gpio::Output<rp2040_hal::gpio::PushPull>,
-                    >,
-                >,
-            >,
-        >,
-    >,
-> = Mutex::new(RefCell::new(None));
+static OLED_DISPLAY: Mutex<RefCell<Option<OledDisplay>>> = Mutex::new(RefCell::new(None));
 
 #[entry]
 fn main() -> ! {
@@ -145,7 +130,7 @@ fn main() -> ! {
         );
 
         let mut display: GraphicsMode<_> = Builder::new()
-            .connect_spi(oled_spi, oled_dc, oled_cs)
+            .connect_spi(oled_spi, oled_dc.into(), oled_cs.into())
             .into();
 
         display.init().unwrap();
@@ -236,22 +221,26 @@ fn main() -> ! {
         oled_display.draw_test().unwrap();
     });
 
-    let key1 = pins.key1.into_pull_up_input();
-    let key2 = pins.key2.into_pull_up_input();
-    let key3 = pins.key3.into_pull_up_input();
-    let key4 = pins.key4.into_pull_up_input();
-    let key5 = pins.key5.into_pull_up_input();
-    let key6 = pins.key6.into_pull_up_input();
-    let key7 = pins.key7.into_pull_up_input();
-    let key8 = pins.key8.into_pull_up_input();
-    let key9 = pins.key9.into_pull_up_input();
-    let key10 = pins.key10.into_pull_up_input();
-    let key11 = pins.key11.into_pull_up_input();
-    let key12 = pins.key12.into_pull_up_input();
+    let keys: [DynPin; 12] = [
+        pins.key1.into_pull_up_input().into(),
+        pins.key2.into_pull_up_input().into(),
+        pins.key3.into_pull_up_input().into(),
+        pins.key4.into_pull_up_input().into(),
+        pins.key5.into_pull_up_input().into(),
+        pins.key6.into_pull_up_input().into(),
+        pins.key7.into_pull_up_input().into(),
+        pins.key8.into_pull_up_input().into(),
+        pins.key9.into_pull_up_input().into(),
+        pins.key10.into_pull_up_input().into(),
+        pins.key11.into_pull_up_input().into(),
+        pins.key12.into_pull_up_input().into(),
+    ];
 
-    let mut mp = macropad::Macropad::new(
-        key1, key2, key3, key4, key5, key6, key7, key8, key9, key10, key11, key12,
-    );
+    //keypad, final row: '0', '.', 'enter'
+    const KEY_MAP: [u8; 12] = [
+        0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
+    ];
+    let mut mp = macropad::Macropad::new(keys, KEY_MAP);
 
     let mut fast_countdown = timer.count_down();
     fast_countdown.start(1.milliseconds());
@@ -267,8 +256,11 @@ fn main() -> ! {
 
         //10ms
         if slow_countdown.wait().is_ok() {
-            //get the current keypresses and send to usb
-            let keycodes = mp.get_keycodes();
+            //get first 6 current keypresses and send to usb
+            let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
+            for (i, code) in mp.get_keycodes().iter().take(keycodes.len()).enumerate() {
+                keycodes[i] = *code;
+            }
 
             cortex_m::interrupt::free(|cs| {
                 let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
