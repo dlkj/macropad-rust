@@ -1,4 +1,4 @@
-use super::*;
+use super::DebouncedPin;
 use embedded_hal::digital::v2::InputPin;
 use failure::Fail;
 
@@ -31,7 +31,7 @@ impl TestInputPin {
 #[test]
 fn is_low_if_starts_low_unbounced() {
     let test_pin = TestInputPin::new(false);
-    let mut debouncer = Debouncer::new(test_pin, false);
+    let mut debouncer = DebouncedPin::new(test_pin, false);
     debouncer.update().unwrap();
 
     assert!(debouncer.is_low().unwrap());
@@ -40,7 +40,7 @@ fn is_low_if_starts_low_unbounced() {
 #[test]
 fn is_high_if_starts_high_unbounced() {
     let test_pin = TestInputPin::new(true);
-    let mut debouncer = Debouncer::new(test_pin, true);
+    let mut debouncer = DebouncedPin::new(test_pin, true);
     debouncer.update().unwrap();
 
     assert!(debouncer.is_high().unwrap());
@@ -49,7 +49,7 @@ fn is_high_if_starts_high_unbounced() {
 #[test]
 fn is_low_if_starts_high_bounced() {
     let test_pin = TestInputPin::new(true);
-    let mut debouncer = Debouncer::new(test_pin, false);
+    let mut debouncer = DebouncedPin::new(test_pin, false);
     debouncer.update().unwrap();
 
     assert!(debouncer.is_low().unwrap());
@@ -58,17 +58,17 @@ fn is_low_if_starts_high_bounced() {
 #[test]
 fn is_heigh_if_starts_low_bounced() {
     let test_pin = TestInputPin::new(false);
-    let mut debouncer = Debouncer::new(test_pin, true);
+    let mut debouncer = DebouncedPin::new(test_pin, true);
     debouncer.update().unwrap();
 
     assert!(debouncer.is_high().unwrap());
 }
 
 #[test]
-fn change_after_8_consecutive_reads_high() {
+fn change_after_5_consecutive_reads_high() {
     let test_pin = TestInputPin::new(true);
-    let mut debouncer = Debouncer::new(test_pin, false);
-    for _ in 0..7 {
+    let mut debouncer = DebouncedPin::new(test_pin, false);
+    for _ in 0..4 {
         debouncer.update().unwrap();
         assert!(debouncer.is_low().unwrap());
     }
@@ -78,10 +78,10 @@ fn change_after_8_consecutive_reads_high() {
 }
 
 #[test]
-fn change_after_8_consecutive_reads_low() {
+fn change_after_5_consecutive_reads_low() {
     let test_pin = TestInputPin::new(false);
-    let mut debouncer = Debouncer::new(test_pin, true);
-    for _ in 0..7 {
+    let mut debouncer = DebouncedPin::new(test_pin, true);
+    for _ in 0..4 {
         debouncer.update().unwrap();
         assert!(debouncer.is_high().unwrap());
     }
@@ -90,16 +90,16 @@ fn change_after_8_consecutive_reads_low() {
     assert!(debouncer.is_low().unwrap());
 }
 #[test]
-fn change_high_after_8_consecutive_afterbouncing_reads() {
+fn change_high_after_5_consecutive_afterbouncing_reads() {
     let test_pin = TestInputPin::new(false);
-    let mut debouncer = Debouncer::new(test_pin, false);
+    let mut debouncer = DebouncedPin::new(test_pin, false);
     for i in 0..14 {
         debouncer.pin.set_value(i % 2 == 0);
         debouncer.update().unwrap();
         assert!(debouncer.is_low().unwrap());
     }
     debouncer.pin.set_value(true);
-    for _ in 0..7 {
+    for _ in 0..4 {
         debouncer.update().unwrap();
         assert!(debouncer.is_low().unwrap());
     }
@@ -109,16 +109,16 @@ fn change_high_after_8_consecutive_afterbouncing_reads() {
 }
 
 #[test]
-fn change_low_after_8_consecutive_afterbouncing_reads() {
+fn change_low_after_5_consecutive_afterbouncing_reads() {
     let test_pin = TestInputPin::new(true);
-    let mut debouncer = Debouncer::new(test_pin, true);
+    let mut debouncer = DebouncedPin::new(test_pin, true);
     for i in 0..15 {
         debouncer.pin.set_value(i % 2 == 0);
         debouncer.update().unwrap();
         assert!(debouncer.is_high().unwrap());
     }
     debouncer.pin.set_value(false);
-    for _ in 0..7 {
+    for _ in 0..4 {
         debouncer.update().unwrap();
         assert!(debouncer.is_high().unwrap());
     }

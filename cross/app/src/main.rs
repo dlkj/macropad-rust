@@ -249,18 +249,21 @@ fn main() -> ! {
     let key11 = pins.key11.into_pull_up_input();
     let key12 = pins.key12.into_pull_up_input();
 
-    let mp = macropad::Macropad::new(
+    let mut mp = macropad::Macropad::new(
         key1, key2, key3, key4, key5, key6, key7, key8, key9, key10, key11, key12,
     );
 
-    // let mut fast_countdown = timer.count_down();
-    // fast_countdown.start(1.milliseconds());
+    let mut fast_countdown = timer.count_down();
+    fast_countdown.start(1.milliseconds());
 
     let mut slow_countdown = timer.count_down();
     slow_countdown.start(10.milliseconds());
 
     loop {
         //1ms scan the keys and debounce
+        if let Ok(_) = fast_countdown.wait() {
+            mp.update().expect("Failed to update macro pad");
+        }
 
         //10ms
         if let Ok(_) = slow_countdown.wait() {

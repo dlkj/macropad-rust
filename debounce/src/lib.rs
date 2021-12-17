@@ -6,18 +6,18 @@ pub enum DebouncerState {
     Unknown,
 }
 
-pub struct Debouncer<P> {
+pub struct DebouncedPin<P> {
     pin: P,
     last: bool,
     history: u8,
 }
 
-impl<P, E> Debouncer<P>
+impl<P, E> DebouncedPin<P>
 where
     P: embedded_hal::digital::v2::InputPin<Error = E>,
 {
-    pub fn new(pin: P, default_state: bool) -> Debouncer<P> {
-        Debouncer {
+    pub fn new(pin: P, default_state: bool) -> DebouncedPin<P> {
+        DebouncedPin {
             pin,
             last: default_state,
             history: if default_state { u8::MAX } else { 0 },
@@ -25,11 +25,13 @@ where
     }
 
     pub fn update(&mut self) -> Result<(), E> {
-        self.history = (self.history << 1) | if self.pin.is_high()? { 1 } else { 0 };
+        const MASK: u8 = 0b11100000; //look for 5 stable values
+
+        self.history = (self.history << 1) | if self.pin.is_high()? { 1 } else { 0 } | MASK;
 
         self.last = match self.history {
             u8::MAX => true,
-            0 => false,
+            MASK => false,
             _ => self.last,
         };
 
@@ -37,7 +39,7 @@ where
     }
 }
 
-impl<P> embedded_hal::digital::v2::InputPin for Debouncer<P>
+impl<P> embedded_hal::digital::v2::InputPin for DebouncedPin<P>
 where
     P: embedded_hal::digital::v2::InputPin,
 {

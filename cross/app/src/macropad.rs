@@ -1,18 +1,18 @@
 use embedded_hal::digital::v2::InputPin;
 
 pub struct Macropad<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12> {
-    key1: K1,
-    key2: K2,
-    key3: K3,
-    key4: K4,
-    key5: K5,
-    key6: K6,
-    key7: K7,
-    key8: K8,
-    key9: K9,
-    key10: K10,
-    key11: K11,
-    key12: K12,
+    key1: debounce::DebouncedPin<K1>,
+    key2: debounce::DebouncedPin<K2>,
+    key3: debounce::DebouncedPin<K3>,
+    key4: debounce::DebouncedPin<K4>,
+    key5: debounce::DebouncedPin<K5>,
+    key6: debounce::DebouncedPin<K6>,
+    key7: debounce::DebouncedPin<K7>,
+    key8: debounce::DebouncedPin<K8>,
+    key9: debounce::DebouncedPin<K9>,
+    key10: debounce::DebouncedPin<K10>,
+    key11: debounce::DebouncedPin<K11>,
+    key12: debounce::DebouncedPin<K12>,
 }
 
 impl<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12, PinE>
@@ -47,18 +47,18 @@ where
         key12: K12,
     ) -> Macropad<K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12> {
         Macropad {
-            key1,
-            key2,
-            key3,
-            key4,
-            key5,
-            key6,
-            key7,
-            key8,
-            key9,
-            key10,
-            key11,
-            key12,
+            key1: debounce::DebouncedPin::new(key1, true),
+            key2: debounce::DebouncedPin::new(key2, true),
+            key3: debounce::DebouncedPin::new(key3, true),
+            key4: debounce::DebouncedPin::new(key4, true),
+            key5: debounce::DebouncedPin::new(key5, true),
+            key6: debounce::DebouncedPin::new(key6, true),
+            key7: debounce::DebouncedPin::new(key7, true),
+            key8: debounce::DebouncedPin::new(key8, true),
+            key9: debounce::DebouncedPin::new(key9, true),
+            key10: debounce::DebouncedPin::new(key10, true),
+            key11: debounce::DebouncedPin::new(key11, true),
+            key12: debounce::DebouncedPin::new(key12, true),
         }
     }
 
@@ -164,6 +164,22 @@ where
                     Some(k)
                 }
             });
-        return keycodes;
+        keycodes
+    }
+
+    pub fn update(&mut self) -> Result<(), PinE> {
+        self.key1.update()?;
+        self.key2.update()?;
+        self.key3.update()?;
+        self.key4.update()?;
+        self.key5.update()?;
+        self.key6.update()?;
+        self.key7.update()?;
+        self.key8.update()?;
+        self.key9.update()?;
+        self.key10.update()?;
+        self.key11.update()?;
+        self.key12.update()?;
+        Ok(())
     }
 }
