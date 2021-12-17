@@ -25,7 +25,7 @@ where
 
 impl<DI: DisplayInterface> OledDisplay<DI> {
     pub fn new(display: GraphicsMode<DI>) -> OledDisplay<DI> {
-        return OledDisplay { display };
+        OledDisplay { display }
     }
 
     pub fn draw_image(&mut self, data: &[u8], width: u32) -> Result<(), DI::Error> {

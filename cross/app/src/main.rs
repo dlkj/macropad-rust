@@ -261,12 +261,12 @@ fn main() -> ! {
 
     loop {
         //1ms scan the keys and debounce
-        if let Ok(_) = fast_countdown.wait() {
+        if fast_countdown.wait().is_ok() {
             mp.update().expect("Failed to update macro pad");
         }
 
         //10ms
-        if let Ok(_) = slow_countdown.wait() {
+        if slow_countdown.wait().is_ok() {
             //get the current keypresses and send to usb
             let keycodes = mp.get_keycodes();
 
