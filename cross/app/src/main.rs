@@ -10,6 +10,7 @@ mod logger;
 mod neopixel;
 mod oled_display;
 mod panic;
+mod rotary_enc;
 
 use adafruit_macropad::{
     hal::{
@@ -236,6 +237,17 @@ fn main() -> ! {
         debounce::DebouncedPin::new(pins.key12.into_pull_up_input().into(), true),
     ];
 
+    let rot_pin_a = RefCell::new(debounce::DebouncedPin::<DynPin>::new(
+        pins.encoder_rota.into_pull_up_input().into(),
+        true,
+    ));
+    let rot_pin_b = RefCell::new(debounce::DebouncedPin::<DynPin>::new(
+        pins.encoder_rotb.into_pull_up_input().into(),
+        true,
+    ));
+
+    let mut rot_enc = rotary_enc::RotaryEncoder::new(&rot_pin_a, &rot_pin_b);
+
     let mut fast_countdown = timer.count_down();
     fast_countdown.start(1.milliseconds());
 
@@ -246,8 +258,19 @@ fn main() -> ! {
         //1ms scan the keys and debounce
         if fast_countdown.wait().is_ok() {
             for k in &mut keys {
-                k.update().expect("Failed to update debouncer");
+                k.update().expect("Failed to update key debouncer");
             }
+
+            rot_pin_a
+                .borrow_mut()
+                .update()
+                .expect("Failed to update rot a debouncer");
+            rot_pin_b
+                .borrow_mut()
+                .update()
+                .expect("Failed to update rot b debouncer");
+
+            rot_enc.update();
         }
 
         //10ms
@@ -277,7 +300,7 @@ fn main() -> ! {
             cortex_m::interrupt::free(|cs| {
                 let mut oled_display_ref = OLED_DISPLAY.borrow(cs).borrow_mut();
                 if let Some(oled_display) = oled_display_ref.as_mut() {
-                    oled_display.draw_numpad().unwrap();
+                    oled_display.draw_numpad(rot_enc.value()).unwrap();
                 }
             });
 

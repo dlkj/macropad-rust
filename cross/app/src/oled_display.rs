@@ -1,3 +1,4 @@
+use core::fmt::Write;
 use embedded_graphics::{
     image::{Image, ImageRawLE},
     mono_font::{ascii::FONT_4X6, ascii::FONT_6X10, MonoTextStyle},
@@ -57,8 +58,10 @@ impl<DI: DisplayInterface> OledDisplay<DI> {
         Ok(())
     }
 
-    pub fn draw_numpad(&mut self) -> Result<(), DI::Error> {
-        self.draw_text_screen("7 8 9\n4 5 6\n1 2 3\n0 . E")
+    pub fn draw_numpad(&mut self, enc_value: i32) -> Result<(), DI::Error> {
+        let mut output = arrayvec::ArrayString::<128>::new();
+        write!(&mut output, "7 8 9\n4 5 6\n1 2 3\n0 . E\n{}", enc_value).unwrap();
+        self.draw_text_screen(output.as_str())
     }
 
     pub fn draw_test(&mut self) -> Result<(), DI::Error> {

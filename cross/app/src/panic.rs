@@ -10,7 +10,7 @@ fn panic(info: &PanicInfo) -> ! {
     error!("{}", info);
 
     let mut output = arrayvec::ArrayString::<1024>::new();
-    let _r = write!(&mut output, "{}", info).map(|_| {
+    write!(&mut output, "{}", info).ok().map(|_| {
         cortex_m::interrupt::free(|cs| {
             let mut display_ref = OLED_DISPLAY.borrow(cs).borrow_mut();
             if let Some(display) = display_ref.as_mut() {
