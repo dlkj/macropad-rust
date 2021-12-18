@@ -10,14 +10,14 @@ fn panic(info: &PanicInfo) -> ! {
     error!("{}", info);
 
     let mut output = arrayvec::ArrayString::<1024>::new();
-    write!(&mut output, "{}", info).ok().map(|_| {
+    if write!(&mut output, "{}", info).ok().is_some() {
         cortex_m::interrupt::free(|cs| {
             let mut display_ref = OLED_DISPLAY.borrow(cs).borrow_mut();
             if let Some(display) = display_ref.as_mut() {
-                let _r = display.draw_text_screen(output.as_str());
+                display.draw_text_screen(output.as_str()).ok();
             }
         });
-    });
+    }
 
     loop {
         atomic::compiler_fence(Ordering::SeqCst);
