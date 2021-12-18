@@ -253,32 +253,7 @@ fn main() -> ! {
         //10ms
         if slow_countdown.wait().is_ok() {
             let keys = mp.get_keys();
-
-            //get first 6 current keypresses and send to usb
-            let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
-
-            let mut keycodes_it = keycodes.iter_mut();
-
-            for (i, k) in keys.iter().enumerate() {
-                if !k {
-                    continue;
-                }
-
-                //keypad, final row: '0', '.', 'enter'
-                const KEY_MAP: [u8; 12] = [
-                    0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
-                ];
-
-                match keycodes_it.next() {
-                    Some(kc) => {
-                        *kc = KEY_MAP[i];
-                    }
-                    None => {
-                        keycodes.fill(0x01); //Error roll over
-                        break;
-                    }
-                }
-            }
+            let keycodes = get_hid_keycodes(&keys);
 
             cortex_m::interrupt::free(|cs| {
                 let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
@@ -304,6 +279,36 @@ fn main() -> ! {
             neopixel.update(&keys).unwrap();
         }
     }
+}
+
+fn get_hid_keycodes(keys: &[bool; 12]) -> [u8; 6] {
+    //get first 6 current keypresses and send to usb
+    let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
+
+    let mut keycodes_it = keycodes.iter_mut();
+
+    for (i, k) in keys.iter().enumerate() {
+        if !k {
+            continue;
+        }
+
+        //keypad, final row: '0', '.', 'enter'
+        const KEY_MAP: [u8; 12] = [
+            0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
+        ];
+
+        match keycodes_it.next() {
+            Some(kc) => {
+                *kc = KEY_MAP[i];
+            }
+            None => {
+                keycodes.fill(0x01); //Error roll over
+                break;
+            }
+        }
+    }
+
+    keycodes
 }
 
 #[allow(non_snake_case)]
