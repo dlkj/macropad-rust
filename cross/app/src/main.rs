@@ -237,40 +237,32 @@ fn main() -> ! {
         debounce::DebouncedPin::new(pins.key12.into_pull_up_input().into(), true),
     ];
 
-    let rot_pin_a = RefCell::new(debounce::DebouncedPin::<DynPin>::new(
-        pins.encoder_rota.into_pull_up_input().into(),
-        true,
-    ));
-    let rot_pin_b = RefCell::new(debounce::DebouncedPin::<DynPin>::new(
-        pins.encoder_rotb.into_pull_up_input().into(),
-        true,
-    ));
+    let rot_pin_a =
+        debounce::DebouncedPin::<DynPin>::new(pins.encoder_rota.into_pull_up_input().into(), true);
+    let rot_pin_b =
+        debounce::DebouncedPin::<DynPin>::new(pins.encoder_rotb.into_pull_up_input().into(), true);
 
-    let mut rot_enc = rotary_enc::RotaryEncoder::new(&rot_pin_a, &rot_pin_b);
+    let mut rot_enc = rotary_enc::RotaryEncoder::new(rot_pin_a, rot_pin_b);
 
     let mut fast_countdown = timer.count_down();
     fast_countdown.start(1.milliseconds());
 
     let mut slow_countdown = timer.count_down();
-    slow_countdown.start(10.milliseconds());
+    slow_countdown.start(20.milliseconds());
 
     loop {
+        let (p_a, p_b) = rot_enc.pins_borrow_mut();
+        p_a.update().expect("Failed to update rot a debouncer");
+        p_b.update().expect("Failed to update rot b debouncer");
+
+        //todo: move onto an interupt timer
+        rot_enc.update();
+
         //1ms scan the keys and debounce
         if fast_countdown.wait().is_ok() {
             for k in &mut keys {
                 k.update().expect("Failed to update key debouncer");
             }
-
-            rot_pin_a
-                .borrow_mut()
-                .update()
-                .expect("Failed to update rot a debouncer");
-            rot_pin_b
-                .borrow_mut()
-                .update()
-                .expect("Failed to update rot b debouncer");
-
-            rot_enc.update();
         }
 
         //10ms
@@ -305,7 +297,7 @@ fn main() -> ! {
             });
 
             //update the LEDs
-            neopixel.update(key_states).unwrap();
+            neopixel.update(key_states, rot_enc.value() * 10).unwrap();
         }
     }
 }

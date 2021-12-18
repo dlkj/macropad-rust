@@ -15,12 +15,12 @@ where
         Neopixels { ws, n: 0 }
     }
 
-    pub fn update(&mut self, keys: &[bool; LEN]) -> Result<(), E>
+    pub fn update(&mut self, keys: &[bool; LEN], rot_enc: i32) -> Result<(), E>
     where
         S::Color: From<RGB8>,
         S: SmartLedsWrite,
     {
-        const BRIGHTNESS: u8 = 128;
+        //const BRIGHTNESS: u8 = 128;
         let led_steps: u16 = WHEEL_STEPS / LEN as u16;
 
         let key_colours = keys.iter().enumerate().map(|(i, k)| {
@@ -31,7 +31,15 @@ where
             }
         });
 
-        self.ws.write(brightness(gamma(key_colours), BRIGHTNESS))?;
+        let b = if rot_enc < 0 {
+            0
+        } else if rot_enc > 255 {
+            255
+        } else {
+            rot_enc as u8
+        };
+
+        self.ws.write(brightness(gamma(key_colours), b))?;
         self.n = (self.n + 1) % WHEEL_STEPS;
 
         Ok(())

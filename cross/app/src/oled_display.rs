@@ -59,8 +59,13 @@ impl<DI: DisplayInterface> OledDisplay<DI> {
     }
 
     pub fn draw_numpad(&mut self, enc_value: i32) -> Result<(), DI::Error> {
-        let mut output = arrayvec::ArrayString::<128>::new();
-        write!(&mut output, "7 8 9\n4 5 6\n1 2 3\n0 . E\n{}", enc_value).unwrap();
+        let mut output = arrayvec::ArrayString::<256>::new();
+        write!(
+            &mut output,
+            "7 8 9\n4 5 6\n1 2 3\n0 . E\nEnc: {}",
+            enc_value
+        )
+        .unwrap();
         self.draw_text_screen(output.as_str())
     }
 
