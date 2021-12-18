@@ -7,7 +7,6 @@
 //! Also echos USB serial input (minicom -b 115200 -o -D /dev/ttyACM0)
 
 mod logger;
-mod macropad;
 mod neopixel;
 mod oled_display;
 mod panic;
@@ -28,6 +27,7 @@ use adafruit_macropad::{
 use core::cell::RefCell;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
+use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::prelude::*;
 use embedded_time::duration::Extensions;
@@ -221,22 +221,20 @@ fn main() -> ! {
         oled_display.draw_test().unwrap();
     });
 
-    let keys: [DynPin; 12] = [
-        pins.key1.into_pull_up_input().into(),
-        pins.key2.into_pull_up_input().into(),
-        pins.key3.into_pull_up_input().into(),
-        pins.key4.into_pull_up_input().into(),
-        pins.key5.into_pull_up_input().into(),
-        pins.key6.into_pull_up_input().into(),
-        pins.key7.into_pull_up_input().into(),
-        pins.key8.into_pull_up_input().into(),
-        pins.key9.into_pull_up_input().into(),
-        pins.key10.into_pull_up_input().into(),
-        pins.key11.into_pull_up_input().into(),
-        pins.key12.into_pull_up_input().into(),
+    let mut keys = [
+        debounce::DebouncedPin::<DynPin>::new(pins.key1.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key2.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key3.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key4.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key5.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key6.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key7.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key8.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key9.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key10.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key11.into_pull_up_input().into(), true),
+        debounce::DebouncedPin::new(pins.key12.into_pull_up_input().into(), true),
     ];
-
-    let mut mp = macropad::Macropad::new(keys);
 
     let mut fast_countdown = timer.count_down();
     fast_countdown.start(1.milliseconds());
@@ -247,13 +245,21 @@ fn main() -> ! {
     loop {
         //1ms scan the keys and debounce
         if fast_countdown.wait().is_ok() {
-            mp.update().expect("Failed to update macro pad");
+            for k in &mut keys {
+                k.update().expect("Failed to update debouncer");
+            }
         }
 
         //10ms
         if slow_countdown.wait().is_ok() {
-            let keys = mp.get_keys();
-            let keycodes = get_hid_keycodes(&keys);
+            let key_states = &keys
+                .iter()
+                .map(|k| k.is_low().unwrap_or(false))
+                .collect::<arrayvec::ArrayVec<_, 12>>()
+                .into_inner()
+                .expect("Unexpected number of key state values");
+
+            let keycodes = get_hid_keycodes(key_states);
 
             cortex_m::interrupt::free(|cs| {
                 let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
@@ -276,7 +282,7 @@ fn main() -> ! {
             });
 
             //update the LEDs
-            neopixel.update(&keys).unwrap();
+            neopixel.update(key_states).unwrap();
         }
     }
 }
