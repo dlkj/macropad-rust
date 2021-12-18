@@ -15,7 +15,7 @@ where
         Neopixels { ws, n: 0 }
     }
 
-    pub fn update(&mut self, keys: &[usize]) -> Result<(), E>
+    pub fn update(&mut self, keys: &[bool; LEN]) -> Result<(), E>
     where
         S::Color: From<RGB8>,
         S: SmartLedsWrite,
@@ -23,8 +23,8 @@ where
         const BRIGHTNESS: u8 = 128;
         let led_steps: u16 = WHEEL_STEPS / LEN as u16;
 
-        let key_colours = (0..LEN).map(|i| {
-            if keys.contains(&i) {
+        let key_colours = keys.iter().enumerate().map(|(i, k)| {
+            if *k {
                 smart_leds::colors::WHITE
             } else {
                 wheel((self.n + i as u16 * led_steps) % WHEEL_STEPS)

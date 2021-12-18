@@ -15,12 +15,13 @@ where
         }
     }
 
-    pub fn get_keys(&self) -> arrayvec::ArrayVec<usize, 12> {
+    pub fn get_keys(&self) -> [bool; 12] {
         self.keys
             .iter()
-            .enumerate()
-            .flat_map(|(i, p)| p.is_low().ok().and_then(|v| v.then(|| i)))
-            .collect()
+            .map(|p| p.is_low().unwrap_or(false))
+            .collect::<arrayvec::ArrayVec<bool, 12>>()
+            .into_inner()
+            .expect("Unexpected number of results")
     }
 
     pub fn update(&mut self) -> Result<(), PinE> {

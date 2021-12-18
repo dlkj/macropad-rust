@@ -257,16 +257,26 @@ fn main() -> ! {
             //get first 6 current keypresses and send to usb
             let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
 
-            if keys.len() > keycodes.len() {
-                keycodes.fill(0x01); //Error roll over
-            } else {
+            let mut keycodes_it = keycodes.iter_mut();
+
+            for (i, k) in keys.iter().enumerate() {
+                if !k {
+                    continue;
+                }
+
                 //keypad, final row: '0', '.', 'enter'
                 const KEY_MAP: [u8; 12] = [
                     0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
                 ];
 
-                for (i, k) in keys.iter().enumerate() {
-                    keycodes[i] = KEY_MAP[*k];
+                match keycodes_it.next() {
+                    Some(kc) => {
+                        *kc = KEY_MAP[i];
+                    }
+                    None => {
+                        keycodes.fill(0x01); //Error roll over
+                        break;
+                    }
                 }
             }
 
