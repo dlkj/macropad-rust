@@ -5,7 +5,7 @@ version = 3
 [[package]]
 name = "adafruit_macropad"
 version = "0.1.0"
-source = "git+https://github.com/rp-rs/rp-hal.git?branch=main#53d9dbdf524a63ae78d06fd93e25de73aa005015"
+source = "git+https://github.com/rp-rs/rp-hal.git?branch=main#c83a31ab2b52b7af55e045fd570aeab3f8c31da7"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -513,7 +513,7 @@ dependencies = [
 [[package]]
 name = "rp2040-hal"
 version = "0.3.0"
-source = "git+https://github.com/rp-rs/rp-hal.git?branch=main#53d9dbdf524a63ae78d06fd93e25de73aa005015"
+source = "git+https://github.com/rp-rs/rp-hal.git?branch=main#c83a31ab2b52b7af55e045fd570aeab3f8c31da7"
 dependencies = [
  "cortex-m",
  "critical-section",
