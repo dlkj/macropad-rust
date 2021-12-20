@@ -251,15 +251,14 @@ fn main() -> ! {
     slow_countdown.start(20.milliseconds());
 
     loop {
-        let (p_a, p_b) = rot_enc.pins_borrow_mut();
-        p_a.update().expect("Failed to update rot a debouncer");
-        p_b.update().expect("Failed to update rot b debouncer");
-
-        //todo: move onto an interupt timer
-        rot_enc.update();
-
         //1ms scan the keys and debounce
         if fast_countdown.wait().is_ok() {
+            let (p_a, p_b) = rot_enc.pins_borrow_mut();
+            p_a.update().expect("Failed to update rot a debouncer");
+            p_b.update().expect("Failed to update rot b debouncer");
+            //todo: move onto an interupt timer
+            rot_enc.update();
+
             for k in &mut keys {
                 k.update().expect("Failed to update key debouncer");
             }

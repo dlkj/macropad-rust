@@ -30,9 +30,6 @@ where
             | (self.pin_b.is_high().expect("unable to read pin_b") as u8 * 2);
 
         let transision = ENCODER_STATES[((new_state << 2) | self.state) as usize];
-        if transision == 0 {
-            return;
-        }
 
         self.state = new_state;
         self.quarter_idx += transision;
