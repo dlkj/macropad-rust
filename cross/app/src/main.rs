@@ -1,10 +1,7 @@
 #![no_std]
 #![no_main]
 
-//! Blinks the LED on a Adafruit Macropad RP2040 board
-//!
-//! This will blink on-board LED.
-//! Also echos USB serial input (minicom -b 115200 -o -D /dev/ttyACM0)
+//USB serial console (minicom -b 115200 -o -D /dev/ttyACM0)
 
 mod logger;
 mod neopixel;
