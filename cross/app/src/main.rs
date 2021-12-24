@@ -3,6 +3,7 @@
 
 //USB serial console (minicom -b 115200 -o -D /dev/ttyACM0)
 
+mod keyboard;
 mod logger;
 mod neopixel;
 mod oled_display;
@@ -31,6 +32,7 @@ use embedded_hal::prelude::*;
 use embedded_time::duration::Extensions;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Hertz;
+use keyboard::{Keyboard, KeyboardLayout, KeyboardMatrix};
 use log::{info, LevelFilter};
 use rp2040_hal::gpio::dynpin::DynPin;
 use sh1106::{prelude::*, Builder};
@@ -241,6 +243,8 @@ fn main() -> ! {
 
     let mut rot_enc = rotary_enc::RotaryEncoder::new(rot_pin_a, rot_pin_b);
 
+    let mut keyboard = Keyboard::new(KeyboardMatrix {}, KeyboardLayout::<70> {});
+
     let mut fast_countdown = timer.count_down();
     fast_countdown.start(1.milliseconds());
 
@@ -248,6 +252,17 @@ fn main() -> ! {
     slow_countdown.start(20.milliseconds());
 
     loop {
+        //fast
+        //Lib: read the matrix
+        //Lib: debounce matrix output
+
+        //100Hz or slower
+        //Lib: apply a layout + layout state --> keycodes
+        //Impl: push keycodes to usb
+
+        //Update screen
+        //Update LEDs
+
         //1ms scan the keys and debounce
         if fast_countdown.wait().is_ok() {
             let (p_a, p_b) = rot_enc.pins_borrow_mut();
@@ -259,10 +274,14 @@ fn main() -> ! {
             for k in &mut keys {
                 k.update().expect("Failed to update key debouncer");
             }
+
+            keyboard.update();
         }
 
         //10ms
         if slow_countdown.wait().is_ok() {
+            let _keyboard_state = keyboard.borrow_state();
+
             let key_states = &keys
                 .iter()
                 .map(|k| k.is_low().unwrap_or(false))
