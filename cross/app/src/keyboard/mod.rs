@@ -1,21 +1,13 @@
+use crate::keyboard::keycode::KeyCode;
+use crate::keyboard::keycode::Modifiers;
 use arrayvec::ArrayVec;
-use bitflags::bitflags;
 use debounce::DebouncedPin;
 use embedded_hal::digital::v2::InputPin;
 
-type KeyCode = u8;
+pub mod keycode;
 
-bitflags! {
-    pub struct Modifiers: u8 {
-        const CTRL_LEFT   = 0b00000001;
-        const SHIFT_LEFT  = 0b00000010;
-        const ALT_LEFT    = 0b00000100;
-        const GUI_LEFT    = 0b00001000;
-        const CTRL_RIGHT  = 0b00010000;
-        const SHIFT_RIGHT = 0b00100000;
-        const ALT_RIGHT   = 0b01000000;
-        const GUI_RIGHT   = 0b10000000;
-    }
+pub enum KeyAction {
+    Key { code: KeyCode },
 }
 
 #[derive(Default, Copy, Clone)]
@@ -77,25 +69,34 @@ pub trait KeyboardLayout<const N: usize> {
 }
 
 pub struct BasicKeyboardLayout<const N: usize> {
-    keymap: [KeyCode; N],
+    keymap: [KeyAction; N],
 }
 
 impl<const N: usize> BasicKeyboardLayout<N> {
-    pub fn new(keymap: [KeyCode; N]) -> BasicKeyboardLayout<N> {
+    pub fn new(keymap: [KeyAction; N]) -> BasicKeyboardLayout<N> {
         BasicKeyboardLayout { keymap }
     }
 }
 
 impl<const N: usize> KeyboardLayout<N> for BasicKeyboardLayout<N> {
     fn state(&self, keys: &[KeyState; N]) -> KeyboardLayoutState<N> {
-        let keycodes = keys
-            .iter()
-            .enumerate()
-            .filter_map(|(i, k)| k.pressed.then(|| self.keymap[i]))
-            .collect();
+        let mut modifiers = Modifiers::empty();
+        let mut keycodes = arrayvec::ArrayVec::new();
+
+        for (i, _) in keys.iter().enumerate().filter(|(_, k)| k.pressed) {
+            match self.keymap[i] {
+                KeyAction::Key { code } => {
+                    if code.is_modifier() {
+                        modifiers |= Modifiers::from(code);
+                    } else {
+                        keycodes.push(code);
+                    }
+                }
+            }
+        }
 
         KeyboardLayoutState {
-            modifiers: Modifiers::empty(),
+            modifiers,
             keycodes,
         }
     }

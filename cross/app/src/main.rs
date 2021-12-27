@@ -31,6 +31,7 @@ use embedded_hal::prelude::*;
 use embedded_time::duration::Extensions;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Hertz;
+use keyboard::keycode::KeyCode;
 use keyboard::Keyboard;
 use log::{info, LevelFilter};
 use rp2040_hal::gpio::dynpin::DynPin;
@@ -243,8 +244,23 @@ fn main() -> ! {
     ];
 
     //keypad, final row: '0', '.', 'enter'
-    const KEY_MAP: [u8; 12] = [
-        0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
+    const KEY_MAP: [keyboard::KeyAction; 12] = [
+        keyboard::KeyAction::Key { code: KeyCode::Kp7 },
+        keyboard::KeyAction::Key { code: KeyCode::Kp8 },
+        keyboard::KeyAction::Key { code: KeyCode::Kp9 },
+        keyboard::KeyAction::Key { code: KeyCode::Kp4 },
+        keyboard::KeyAction::Key { code: KeyCode::Kp5 },
+        keyboard::KeyAction::Key { code: KeyCode::Kp6 },
+        keyboard::KeyAction::Key { code: KeyCode::Kp1 },
+        keyboard::KeyAction::Key { code: KeyCode::Kp2 },
+        keyboard::KeyAction::Key { code: KeyCode::Kp3 },
+        keyboard::KeyAction::Key { code: KeyCode::Kp0 },
+        keyboard::KeyAction::Key {
+            code: KeyCode::KpDot,
+        },
+        keyboard::KeyAction::Key {
+            code: KeyCode::KpEnter,
+        },
     ];
 
     let mut keyboard = Keyboard::new(
@@ -274,7 +290,7 @@ fn main() -> ! {
         if slow_countdown.wait().is_ok() {
             //100Hz or slower
             let keyboard_state = keyboard.state().expect("Failed to get Keyboard state");
-            let keyboard_report = get_hid_keycodes(&keyboard_state);
+            let keyboard_report = get_hid_report(&keyboard_state);
 
             //todo - spin lock until usb ready to recive, reset timers
             cortex_m::interrupt::free(|cs| {
@@ -306,7 +322,7 @@ fn main() -> ! {
     }
 }
 
-fn get_hid_keycodes<const N: usize>(state: &keyboard::KeyboardState<N>) -> KeyboardReport {
+fn get_hid_report<const N: usize>(state: &keyboard::KeyboardState<N>) -> KeyboardReport {
     //get first 6 current keypresses and send to usb
     let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
 
@@ -315,7 +331,7 @@ fn get_hid_keycodes<const N: usize>(state: &keyboard::KeyboardState<N>) -> Keybo
     for k in &state.keycodes {
         match keycodes_it.next() {
             Some(kc) => {
-                *kc = *k;
+                *kc = *k as u8;
             }
             None => {
                 keycodes.fill(0x01); //Error roll over
