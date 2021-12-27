@@ -241,9 +241,15 @@ fn main() -> ! {
         pins.key11.into_pull_up_input().into(),
         pins.key12.into_pull_up_input().into(),
     ];
+
+    //keypad, final row: '0', '.', 'enter'
+    const KEY_MAP: [u8; 12] = [
+        0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
+    ];
+
     let mut keyboard = Keyboard::new(
         keyboard::DirectPinMatrix::new(pins),
-        keyboard::BasicKeyboardLayout {},
+        keyboard::BasicKeyboardLayout::new(KEY_MAP),
     );
 
     let mut fast_countdown = timer.count_down();
@@ -267,8 +273,8 @@ fn main() -> ! {
         //10ms
         if slow_countdown.wait().is_ok() {
             //100Hz or slower
-            let keyboard_state = keyboard.state();
-            let keyboard_report = get_hid_keycodes(keyboard_state);
+            let keyboard_state = keyboard.state().expect("Failed to get Keyboard state");
+            let keyboard_report = get_hid_keycodes(&keyboard_state);
 
             //todo - spin lock until usb ready to recive, reset timers
             cortex_m::interrupt::free(|cs| {
@@ -287,26 +293,29 @@ fn main() -> ! {
             });
 
             //update the LEDs
-            neopixel.update(&[false; 12], rot_enc.value() * 10).unwrap();
+            let pressed_keys = keyboard_state
+                .keys
+                .iter()
+                .map(|k| k.pressed)
+                .collect::<arrayvec::ArrayVec<bool, 12>>();
+
+            neopixel
+                .update(&pressed_keys, rot_enc.value() * 10)
+                .unwrap();
         }
     }
 }
 
-fn get_hid_keycodes<const N: usize>(state: keyboard::KeyboardState<N>) -> KeyboardReport {
+fn get_hid_keycodes<const N: usize>(state: &keyboard::KeyboardState<N>) -> KeyboardReport {
     //get first 6 current keypresses and send to usb
     let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
 
     let mut keycodes_it = keycodes.iter_mut();
 
-    for k in state.keycodes {
-        //keypad, final row: '0', '.', 'enter'
-        const KEY_MAP: [u8; 12] = [
-            0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
-        ];
-
+    for k in &state.keycodes {
         match keycodes_it.next() {
             Some(kc) => {
-                *kc = KEY_MAP[k as usize];
+                *kc = *k;
             }
             None => {
                 keycodes.fill(0x01); //Error roll over

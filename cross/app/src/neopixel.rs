@@ -15,7 +15,7 @@ where
         Neopixels { ws, n: 0 }
     }
 
-    pub fn update(&mut self, keys: &[bool; LEN], rot_enc: i32) -> Result<(), E>
+    pub fn update(&mut self, keys: &[bool], rot_enc: i32) -> Result<(), E>
     where
         S::Color: From<RGB8>,
         S: SmartLedsWrite,

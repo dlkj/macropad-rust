@@ -67,20 +67,49 @@ where
     }
 }
 
-pub trait KeyboardLayout<const KEY_COUNT: usize> {}
-
-pub struct BasicKeyboardLayout<const N: usize> {}
-
-impl<const N: usize> KeyboardLayout<N> for BasicKeyboardLayout<N> {}
-
-pub struct KeyboardState<const KEY_COUNT: usize> {
+pub struct KeyboardLayoutState<const KEY_COUNT: usize> {
     pub modifiers: Modifiers,
     pub keycodes: ArrayVec<KeyCode, KEY_COUNT>,
 }
 
+pub trait KeyboardLayout<const N: usize> {
+    fn state(&self, keys: &[KeyState; N]) -> KeyboardLayoutState<N>;
+}
+
+pub struct BasicKeyboardLayout<const N: usize> {
+    keymap: [KeyCode; N],
+}
+
+impl<const N: usize> BasicKeyboardLayout<N> {
+    pub fn new(keymap: [KeyCode; N]) -> BasicKeyboardLayout<N> {
+        BasicKeyboardLayout { keymap }
+    }
+}
+
+impl<const N: usize> KeyboardLayout<N> for BasicKeyboardLayout<N> {
+    fn state(&self, keys: &[KeyState; N]) -> KeyboardLayoutState<N> {
+        let keycodes = keys
+            .iter()
+            .enumerate()
+            .filter_map(|(i, k)| k.pressed.then(|| self.keymap[i]))
+            .collect();
+
+        KeyboardLayoutState {
+            modifiers: Modifiers::empty(),
+            keycodes,
+        }
+    }
+}
+
+pub struct KeyboardState<const KEY_COUNT: usize> {
+    pub modifiers: Modifiers,
+    pub keycodes: ArrayVec<KeyCode, KEY_COUNT>,
+    pub keys: [KeyState; KEY_COUNT],
+}
+
 pub struct Keyboard<KM, KL, const KEY_COUNT: usize> {
     matrix: KM,
-    _layout: KL,
+    layout: KL,
 }
 
 impl<KM, KL, const KEY_COUNT: usize> Keyboard<KM, KL, KEY_COUNT>
@@ -89,25 +118,19 @@ where
     KL: KeyboardLayout<KEY_COUNT>,
 {
     pub fn new(matrix: KM, layout: KL) -> Keyboard<KM, KL, KEY_COUNT> {
-        Keyboard {
-            matrix,
-            _layout: layout,
-        }
+        Keyboard { matrix, layout }
     }
     pub fn update(&mut self) -> Result<(), KM::Error> {
         self.matrix.update()
     }
-    pub fn state(&self) -> KeyboardState<KEY_COUNT> {
-        KeyboardState {
-            modifiers: Modifiers::empty(),
-            keycodes: self
-                .matrix
-                .keys()
-                .unwrap_or([KeyState { pressed: false }; KEY_COUNT])
-                .iter()
-                .enumerate()
-                .filter_map(|(i, p)| p.pressed.then(|| i as u8))
-                .collect(),
-        }
+    pub fn state(&self) -> Result<KeyboardState<KEY_COUNT>, KM::Error> {
+        let keys = self.matrix.keys()?;
+        let layout_state = self.layout.state(&keys);
+
+        Ok(KeyboardState {
+            modifiers: layout_state.modifiers,
+            keycodes: layout_state.keycodes,
+            keys,
+        })
     }
 }
