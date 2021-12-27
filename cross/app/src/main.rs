@@ -26,7 +26,6 @@ use adafruit_macropad::{
 use core::cell::RefCell;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
-use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::prelude::*;
 use embedded_time::duration::Extensions;
@@ -221,21 +220,6 @@ fn main() -> ! {
         oled_display.draw_test().unwrap();
     });
 
-    let mut keys = [
-        debounce::DebouncedPin::<DynPin>::new(pins.key1.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key2.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key3.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key4.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key5.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key6.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key7.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key8.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key9.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key10.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key11.into_pull_up_input().into(), true),
-        debounce::DebouncedPin::new(pins.key12.into_pull_up_input().into(), true),
-    ];
-
     let rot_pin_a =
         debounce::DebouncedPin::<DynPin>::new(pins.encoder_rota.into_pull_up_input().into(), true);
     let rot_pin_b =
@@ -243,7 +227,24 @@ fn main() -> ! {
 
     let mut rot_enc = rotary_enc::RotaryEncoder::new(rot_pin_a, rot_pin_b);
 
-    let mut keyboard = Keyboard::new(KeyboardMatrix {}, KeyboardLayout::<70> {});
+    let pins: [DynPin; 12] = [
+        pins.key1.into_pull_up_input().into(),
+        pins.key2.into_pull_up_input().into(),
+        pins.key3.into_pull_up_input().into(),
+        pins.key4.into_pull_up_input().into(),
+        pins.key5.into_pull_up_input().into(),
+        pins.key6.into_pull_up_input().into(),
+        pins.key7.into_pull_up_input().into(),
+        pins.key8.into_pull_up_input().into(),
+        pins.key9.into_pull_up_input().into(),
+        pins.key10.into_pull_up_input().into(),
+        pins.key11.into_pull_up_input().into(),
+        pins.key12.into_pull_up_input().into(),
+    ];
+    let mut keyboard = Keyboard::new(
+        keyboard::DirectPinMatrix::new(pins),
+        keyboard::BasicKeyboardLayout {},
+    );
 
     let mut fast_countdown = timer.count_down();
     fast_countdown.start(1.milliseconds());
@@ -260,41 +261,20 @@ fn main() -> ! {
             //todo: move onto an interupt timer
             rot_enc.update();
 
-            for k in &mut keys {
-                k.update().expect("Failed to update key debouncer");
-            }
-
-            //Lib: read the matrix
-            //Lib: debounce matrix output
-            keyboard.update();
+            keyboard.update().expect("Failed to update keyboard");
         }
 
         //10ms
         if slow_countdown.wait().is_ok() {
             //100Hz or slower
-            //Lib: apply a layout + layout state --> keycodes
-            //Impl: push keycodes to usb
-            let _keyboard_state = keyboard.state();
-
-            let key_states = &keys
-                .iter()
-                .map(|k| k.is_low().unwrap_or(false))
-                .collect::<arrayvec::ArrayVec<_, 12>>()
-                .into_inner()
-                .expect("Unexpected number of key state values");
-
-            let keycodes = get_hid_keycodes(key_states);
+            let keyboard_state = keyboard.state();
+            let keyboard_report = get_hid_keycodes(keyboard_state);
 
             //todo - spin lock until usb ready to recive, reset timers
             cortex_m::interrupt::free(|cs| {
                 let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
                 if let Some(keyboard) = keyboard_ref.as_mut() {
-                    let _ = keyboard.push_input(&KeyboardReport {
-                        modifier: 0,
-                        leds: 0,
-                        reserved: 0,
-                        keycodes,
-                    });
+                    let _ = keyboard.push_input(&keyboard_report);
                 }
             });
 
@@ -307,22 +287,18 @@ fn main() -> ! {
             });
 
             //update the LEDs
-            neopixel.update(key_states, rot_enc.value() * 10).unwrap();
+            neopixel.update(&[false; 12], rot_enc.value() * 10).unwrap();
         }
     }
 }
 
-fn get_hid_keycodes(keys: &[bool; 12]) -> [u8; 6] {
+fn get_hid_keycodes<const N: usize>(state: keyboard::KeyboardState<N>) -> KeyboardReport {
     //get first 6 current keypresses and send to usb
     let mut keycodes: [u8; 6] = [0, 0, 0, 0, 0, 0];
 
     let mut keycodes_it = keycodes.iter_mut();
 
-    for (i, k) in keys.iter().enumerate() {
-        if !k {
-            continue;
-        }
-
+    for k in state.keycodes {
         //keypad, final row: '0', '.', 'enter'
         const KEY_MAP: [u8; 12] = [
             0x5f, 0x60, 0x61, 0x5c, 0x5d, 0x5e, 0x59, 0x5a, 0x5b, 0x62, 0x63, 0x58,
@@ -330,7 +306,7 @@ fn get_hid_keycodes(keys: &[bool; 12]) -> [u8; 6] {
 
         match keycodes_it.next() {
             Some(kc) => {
-                *kc = KEY_MAP[i];
+                *kc = KEY_MAP[k as usize];
             }
             None => {
                 keycodes.fill(0x01); //Error roll over
@@ -339,7 +315,12 @@ fn get_hid_keycodes(keys: &[bool; 12]) -> [u8; 6] {
         }
     }
 
-    keycodes
+    KeyboardReport {
+        modifier: state.modifiers.bits(),
+        leds: 0,
+        reserved: 0,
+        keycodes,
+    }
 }
 
 #[allow(non_snake_case)]
