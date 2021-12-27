@@ -32,7 +32,7 @@ use embedded_hal::prelude::*;
 use embedded_time::duration::Extensions;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Hertz;
-use keyboard::{Keyboard, KeyboardLayout, KeyboardMatrix};
+use keyboard::Keyboard;
 use log::{info, LevelFilter};
 use rp2040_hal::gpio::dynpin::DynPin;
 use sh1106::{prelude::*, Builder};
@@ -252,17 +252,6 @@ fn main() -> ! {
     slow_countdown.start(20.milliseconds());
 
     loop {
-        //fast
-        //Lib: read the matrix
-        //Lib: debounce matrix output
-
-        //100Hz or slower
-        //Lib: apply a layout + layout state --> keycodes
-        //Impl: push keycodes to usb
-
-        //Update screen
-        //Update LEDs
-
         //1ms scan the keys and debounce
         if fast_countdown.wait().is_ok() {
             let (p_a, p_b) = rot_enc.pins_borrow_mut();
@@ -275,12 +264,17 @@ fn main() -> ! {
                 k.update().expect("Failed to update key debouncer");
             }
 
+            //Lib: read the matrix
+            //Lib: debounce matrix output
             keyboard.update();
         }
 
         //10ms
         if slow_countdown.wait().is_ok() {
-            let _keyboard_state = keyboard.borrow_state();
+            //100Hz or slower
+            //Lib: apply a layout + layout state --> keycodes
+            //Impl: push keycodes to usb
+            let _keyboard_state = keyboard.state();
 
             let key_states = &keys
                 .iter()
@@ -291,6 +285,7 @@ fn main() -> ! {
 
             let keycodes = get_hid_keycodes(key_states);
 
+            //todo - spin lock until usb ready to recive, reset timers
             cortex_m::interrupt::free(|cs| {
                 let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
                 if let Some(keyboard) = keyboard_ref.as_mut() {

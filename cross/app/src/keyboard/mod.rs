@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
+use embedded_hal::digital::v2::InputPin;
 
-type KeyID = u8;
 type KeyCode = u8;
 type LayerID = u8;
 
@@ -19,37 +19,65 @@ bitflags! {
     }
 }
 
-pub struct KeyboardMatrix {}
-pub struct KeyboardLayout<const KEY_COUNT: usize> {}
+struct KeyState {}
+
+pub trait KeyboardMatrix<const KEY_COUNT: usize> {
+    fn keys(&self) -> [KeyState; KEY_COUNT];
+}
+
+struct DirectPinMatrix<P, const N: usize> {
+    pins: [P; N],
+}
+
+impl<P, const N: usize> DirectPinMatrix<P, N> {
+    fn new(pins: [P; N]) -> DirectPinMatrix<P, N>
+    where
+        P: InputPin,
+    {
+        DirectPinMatrix { pins }
+    }
+}
+
+impl<P, const N: usize> KeyboardMatrix<N> for DirectPinMatrix<P, N>
+where
+    P: InputPin,
+{
+    fn keys(&self) -> [KeyState; N] {
+        let mut keystates = [KeyState {}; N];
+
+        for (i, p) in self.pins.iter().enumerate() {
+            keystates[i].pressed = p.is_low()?;
+        }
+
+        keystates
+    }
+}
+
+pub trait KeyboardLayout<const KEY_COUNT: usize> {}
 
 pub struct KeyboardState<const KEY_COUNT: usize> {
     modifiers: Modifiers,
-    keys: ArrayVec<KeyID, KEY_COUNT>,
     keycodes: ArrayVec<KeyCode, KEY_COUNT>,
-    active_layer: LayerID,
 }
 
-pub struct Keyboard<const KEY_COUNT: usize> {
-    matrix: KeyboardMatrix,
-    layout: KeyboardLayout<KEY_COUNT>,
-    state: KeyboardState<KEY_COUNT>,
+pub struct Keyboard<KM, KL, const KEY_COUNT: usize> {
+    matrix: KM,
+    layout: KL,
 }
 
-impl<const KEY_COUNT: usize> Keyboard<KEY_COUNT> {
-    pub fn new(matrix: KeyboardMatrix, layout: KeyboardLayout<KEY_COUNT>) -> Keyboard<KEY_COUNT> {
-        Keyboard {
-            matrix,
-            layout,
-            state: KeyboardState {
-                modifiers: Modifiers::NONE,
-                keys: ArrayVec::new(),
-                keycodes: ArrayVec::new(),
-                active_layer: 0,
-            },
-        }
+impl<KM, KL, const KEY_COUNT: usize> Keyboard<KM, KL, KEY_COUNT>
+where
+    KM: KeyboardMatrix<KEY_COUNT>,
+    KL: KeyboardLayout<KEY_COUNT>,
+{
+    pub fn new(matrix: KM, layout: KL) -> Keyboard<KM, KL, KEY_COUNT> {
+        Keyboard { matrix, layout }
     }
     pub fn update(&mut self) {}
-    pub fn borrow_state(&self) -> &KeyboardState<KEY_COUNT> {
-        &self.state
+    pub fn state(&self) -> KeyboardState<KEY_COUNT> {
+        KeyboardState {
+            modifiers: Modifiers::NONE,
+            keycodes: ArrayVec::new(),
+        }
     }
 }
