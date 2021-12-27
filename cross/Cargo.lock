@@ -37,7 +37,7 @@ dependencies = [
  "embedded-time",
  "itertools",
  "log",
- "pio 0.1.0 (git+https://github.com/rp-rs/pio-rs.git?branch=main)",
+ "pio",
  "rp2040-boot2",
  "sh1106",
  "smart-leds",
@@ -420,16 +420,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pio"
-version = "0.1.0"
-source = "git+https://github.com/rp-rs/pio-rs.git?branch=main#33998e28e32289c08ba1477f42104192b4bfdaef"
-dependencies = [
- "arrayvec",
- "num_enum",
- "paste",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -521,7 +511,7 @@ dependencies = [
  "itertools",
  "nb 1.0.0",
  "paste",
- "pio 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pio",
  "rand_core",
  "rp2040-pac",
  "usb-device",
@@ -707,7 +697,7 @@ dependencies = [
  "embedded-hal",
  "embedded-time",
  "nb 1.0.0",
- "pio 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pio",
  "rp2040-hal",
  "smart-leds-trait",
 ]
