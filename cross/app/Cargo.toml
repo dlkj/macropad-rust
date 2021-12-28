@@ -20,10 +20,10 @@ usbd-serial = "0.1.1"
 usbd-hid = "0.5.2"
 sh1106 = "0.4.0"
 
-adafruit_macropad = { git = "https://github.com/rp-rs/rp-hal.git", branch = "main" }
+adafruit-macropad = { version = "0.1.0" }
 rp2040-boot2 = { version = "0.2.0" }
 pio = { version = "0.1.0" }
-ws2812-pio = { git = "https://github.com/ithinuel/ws2812-pio-rs" }
+ws2812-pio = { git = "https://github.com/dlkj/ws2812-pio-rs" }
 
 embedded-time = "0.12.0"
 embedded-graphics = "0.7.1"

@@ -3,9 +3,10 @@
 version = 3
 
 [[package]]
-name = "adafruit_macropad"
+name = "adafruit-macropad"
 version = "0.1.0"
-source = "git+https://github.com/rp-rs/rp-hal.git?branch=main#c83a31ab2b52b7af55e045fd570aeab3f8c31da7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2544dd6791e1696debf24f1fe071d7d7d50c0646d32337cbb7ec8152e22de046"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -26,7 +27,7 @@ dependencies = [
 name = "app"
 version = "0.1.0"
 dependencies = [
- "adafruit_macropad",
+ "adafruit-macropad",
  "arrayvec",
  "bitflags",
  "cortex-m",
@@ -428,18 +429,18 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.34"
+version = "1.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f84e92c0f7c9d58328b85a78557813e4bd845130db68d7184635344399423b1"
+checksum = "c7342d5883fbccae1cc37a2353b09c87c9b0f3afd73f5fb9bba687a1f733b029"
 dependencies = [
  "unicode-xid",
 ]
 
 [[package]]
 name = "quote"
-version = "1.0.10"
+version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38bc8cc6a5f2e3655e0899c1b848643b2562f853f114bfec7be120678e3ace05"
+checksum = "47aa80447ce4daf1717500037052af176af5d38cc3e571d9ec1c7353fc10c87d"
 dependencies = [
  "proc-macro2",
 ]
@@ -509,7 +510,8 @@ dependencies = [
 [[package]]
 name = "rp2040-hal"
 version = "0.3.0"
-source = "git+https://github.com/rp-rs/rp-hal.git?branch=main#c83a31ab2b52b7af55e045fd570aeab3f8c31da7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4cc5eed93ae7e2432580923fc5d5797c14b2bf215e1ab84e828f211881393b9"
 dependencies = [
  "cortex-m",
  "critical-section",
@@ -607,9 +609,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.82"
+version = "1.0.84"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8daf5dd0bb60cbd4137b1b587d2fc0ae729bc07cf01cd70b36a1ed5ade3b9d59"
+checksum = "ecb2e6da8ee5eb9a61068762a32fa9619cc591ceb055b3687f4cd4051ec2e06b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -698,7 +700,7 @@ dependencies = [
 [[package]]
 name = "ws2812-pio"
 version = "0.1.0"
-source = "git+https://github.com/ithinuel/ws2812-pio-rs#4f0d81e594ea9934f9c4c38ed9824ad0cce4ebb5"
+source = "git+https://github.com/dlkj/ws2812-pio-rs#4cd6b9b04b5984c0fcdde0a60ccf71b0955dfe7a"
 dependencies = [
  "cortex-m",
  "embedded-hal",
