@@ -67,7 +67,7 @@ fn main() -> ! {
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
 
     let external_xtal_freq_hz = 12_000_000u32;
-    let clocks = rp2040_hal::clocks::init_clocks_and_plls(
+    let clocks: rp2040_hal::clocks::ClocksManager = rp2040_hal::clocks::init_clocks_and_plls(
         external_xtal_freq_hz,
         pac.XOSC,
         pac.CLOCKS,
@@ -92,16 +92,14 @@ fn main() -> ! {
     //init neopixels
     let mut neopixel: neopixel::Neopixels<_, 12> = {
         let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
-        let neopixel_pin = pins.neopixel.into_mode();
 
         let ws = Ws2812::new(
-            neopixel_pin,
+            pins.neopixel.into_mode(),
             &mut pio,
             sm0,
             clocks.peripheral_clock.freq(),
             timer.count_down(),
         );
-
         neopixel::Neopixels::new(ws)
     };
 
@@ -210,16 +208,9 @@ fn main() -> ! {
             .unwrap();
     });
 
-    delay.delay_ms(2000);
+    delay.delay_ms(250);
 
     info!("macropad starting");
-
-    //Do some example graphics drawing
-    cortex_m::interrupt::free(|cs| {
-        let mut oled_display_ref = OLED_DISPLAY.borrow(cs).borrow_mut();
-        let oled_display = oled_display_ref.as_mut().unwrap();
-        oled_display.draw_test().unwrap();
-    });
 
     let rot_pin_a =
         debounce::DebouncedPin::<DynPin>::new(pins.encoder_rota.into_pull_up_input().into(), true);
@@ -274,6 +265,8 @@ fn main() -> ! {
     let mut slow_countdown = timer.count_down();
     slow_countdown.start(20.milliseconds());
 
+    info!("Running main loop");
+
     loop {
         //1ms scan the keys and debounce
         if fast_countdown.wait().is_ok() {
@@ -316,7 +309,7 @@ fn main() -> ! {
                 .collect::<arrayvec::ArrayVec<bool, 12>>();
 
             neopixel
-                .update(&pressed_keys, rot_enc.value() * 10)
+                .update(&pressed_keys, (rot_enc.value() * 10) + 128)
                 .unwrap();
         }
     }
