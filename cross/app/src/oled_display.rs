@@ -69,6 +69,7 @@ impl<DI: DisplayInterface> OledDisplay<DI> {
         self.draw_text_screen(output.as_str())
     }
 
+    #[allow(dead_code)]
     pub fn draw_test(&mut self) -> Result<(), DI::Error> {
         self.display.clear();
 

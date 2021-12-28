@@ -9,6 +9,7 @@ mod neopixel;
 mod oled_display;
 mod panic;
 mod rotary_enc;
+mod usb;
 
 use adafruit_macropad::{
     hal::{
@@ -18,7 +19,6 @@ use adafruit_macropad::{
         pio::PIOExt,
         sio::Sio,
         timer::Timer,
-        usb::UsbBus,
         watchdog::Watchdog,
     },
     Pins,
@@ -36,11 +36,8 @@ use keyboard::Keyboard;
 use log::{info, LevelFilter};
 use rp2040_hal::gpio::dynpin::DynPin;
 use sh1106::{prelude::*, Builder};
-use usb_device::{class_prelude::*, prelude::*};
+use usb_device::class_prelude::*;
 use usbd_hid::descriptor::KeyboardReport;
-use usbd_hid::descriptor::SerializedDescriptor;
-use usbd_hid::hid_class::HIDClass;
-use usbd_serial::SerialPort;
 use ws2812_pio::Ws2812;
 
 #[link_section = ".boot2"]
@@ -50,13 +47,9 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GD25Q64CS;
 type Spi = rp2040_hal::spi::Spi<rp2040_hal::spi::Enabled, rp2040_hal::pac::SPI1, 8_u8>;
 type OledDisplay = oled_display::OledDisplay<sh1106::interface::SpiInterface<Spi, DynPin, DynPin>>;
 
-static USB_DEVICE: Mutex<RefCell<Option<UsbDevice<UsbBus>>>> = Mutex::new(RefCell::new(None));
-
-static USB_SERIAL: Mutex<RefCell<Option<SerialPort<UsbBus>>>> = Mutex::new(RefCell::new(None));
-static USB_KEYBOARD: Mutex<RefCell<Option<HIDClass<UsbBus>>>> = Mutex::new(RefCell::new(None));
-
+static USB_MANAGER: Mutex<RefCell<Option<usb::UsbManager<rp2040_hal::usb::UsbBus>>>> =
+    Mutex::new(RefCell::new(None));
 static LOGGER: logger::MacropadLogger = logger::MacropadLogger;
-
 static OLED_DISPLAY: Mutex<RefCell<Option<OledDisplay>>> = Mutex::new(RefCell::new(None));
 
 #[entry]
@@ -141,51 +134,25 @@ fn main() -> ! {
         });
     }
 
-    //Init USB
-    static mut USB_BUS: Option<UsbBusAllocator<rp2040_hal::usb::UsbBus>> = None;
-
-    {
-        // Set up the USB driver
-        let usb_bus = UsbBusAllocator::new(rp2040_hal::usb::UsbBus::new(
-            pac.USBCTRL_REGS,
-            pac.USBCTRL_DPRAM,
-            clocks.usb_clock,
-            true,
-            &mut pac.RESETS,
-        ));
-
-        cortex_m::interrupt::free(|_cs| unsafe {
-            // Note (safety): This is safe as interrupts are masked
-            USB_BUS = Some(usb_bus);
-        });
-    }
-
     cortex_m::interrupt::free(|cs| {
-        // Note (safety): This is safe as interrupts are masked
-        let bus_ref = unsafe { USB_BUS.as_ref().unwrap() };
+        // Note (safety): interupts not yet enabled
 
-        // Set up the USB Communications Class Device driver
-        USB_SERIAL
-            .borrow(cs)
-            .replace(Some(SerialPort::new(bus_ref)));
-
-        // Set up the USB HID Device drivers
-        USB_KEYBOARD
-            .borrow(cs)
-            .replace(Some(HIDClass::new(bus_ref, KeyboardReport::desc(), 50)));
-
-        // Create a USB device with a fake VID and PID
-        let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x16c0, 0x27dd))
-            .manufacturer("Adafruit")
-            .product("Macropad")
-            .serial_number("TEST")
-            .device_class(0x00) // from: https://www.usb.org/defined-class-codes
-            .build();
-
-        USB_DEVICE.borrow(cs).replace(Some(usb_dev));
+        //Init USB
+        static mut USB_BUS: Option<UsbBusAllocator<rp2040_hal::usb::UsbBus>> = None;
 
         unsafe {
-            // Note (safety): interupts not yet enabled
+            USB_BUS = Some(UsbBusAllocator::new(rp2040_hal::usb::UsbBus::new(
+                pac.USBCTRL_REGS,
+                pac.USBCTRL_DPRAM,
+                clocks.usb_clock,
+                true,
+                &mut pac.RESETS,
+            )));
+
+            USB_MANAGER
+                .borrow(cs)
+                .replace(Some(usb::UsbManager::new(USB_BUS.as_ref().unwrap())));
+
             log::set_logger_racy(&LOGGER).unwrap();
         }
     });
@@ -287,9 +254,9 @@ fn main() -> ! {
 
             //todo - spin lock until usb ready to recive, reset timers
             cortex_m::interrupt::free(|cs| {
-                let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
-                if let Some(keyboard) = keyboard_ref.as_mut() {
-                    let _ = keyboard.push_input(&keyboard_report);
+                let mut usb_ref = USB_MANAGER.borrow(cs).borrow_mut();
+                if let Some(usb) = usb_ref.as_mut() {
+                    usb.keyboard_borrow_mut().push_input(&keyboard_report).ok();
                 }
             });
 
@@ -345,31 +312,9 @@ fn get_hid_report<const N: usize>(state: &keyboard::KeyboardState<N>) -> Keyboar
 #[interrupt]
 fn USBCTRL_IRQ() {
     cortex_m::interrupt::free(|cs| {
-        let mut serial_ref = USB_SERIAL.borrow(cs).borrow_mut();
-        let serial = serial_ref.as_mut().unwrap();
-
-        let mut keyboard_ref = USB_KEYBOARD.borrow(cs).borrow_mut();
-        let keyboard = keyboard_ref.as_mut().unwrap();
-
-        // Poll the USB driver with all of our supported USB Classes
-        if USB_DEVICE
-            .borrow(cs)
-            .borrow_mut()
-            .as_mut()
-            .unwrap()
-            .poll(&mut [serial, keyboard])
-        {
-            let mut buf = [0u8; 64];
-            match serial.read(&mut buf) {
-                Err(_e) => {}
-                Ok(_count) => {}
-            }
-
-            let mut buf = [0u8; 64];
-            match keyboard.pull_raw_output(&mut buf) {
-                Err(_e) => {}
-                Ok(_count) => {}
-            }
+        let mut usb_ref = USB_MANAGER.borrow(cs).borrow_mut();
+        if let Some(usb) = usb_ref.as_mut() {
+            usb.service_irq();
         }
     });
 }
