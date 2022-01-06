@@ -700,7 +700,7 @@ dependencies = [
 [[package]]
 name = "ws2812-pio"
 version = "0.1.0"
-source = "git+https://github.com/dlkj/ws2812-pio-rs#4cd6b9b04b5984c0fcdde0a60ccf71b0955dfe7a"
+source = "git+https://github.com/ithinuel/ws2812-pio-rs#83fc175fd99f230e477f6fc4a0802e29fd8dcd6f"
 dependencies = [
  "cortex-m",
  "embedded-hal",
