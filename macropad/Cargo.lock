@@ -24,32 +24,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "app"
-version = "0.1.0"
-dependencies = [
- "adafruit-macropad",
- "arrayvec",
- "bitflags",
- "cortex-m",
- "cortex-m-rt",
- "debounce",
- "embedded-graphics",
- "embedded-hal",
- "embedded-text",
- "embedded-time",
- "itertools",
- "log",
- "pio",
- "rp2040-boot2",
- "sh1106",
- "smart-leds",
- "usb-device",
- "usbd-hid",
- "usbd-serial",
- "ws2812-pio",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -57,9 +31,9 @@ checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
 name = "autocfg"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
+checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "az"
@@ -95,22 +69,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46afbd2983a5d5a7bd740ccb198caf5b82f45c40c09c0eed36052d91cb92e719"
 
 [[package]]
-name = "bitflags"
-version = "1.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
-
-[[package]]
-name = "bytemuck"
-version = "1.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "439989e6b8c38d1b6570a384ef1e49c8848128f5a97f3914baef02920842712f"
-
-[[package]]
 name = "byteorder"
-version = "1.3.4"
+version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
+checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "cfg-if"
@@ -172,28 +134,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "debounce"
-version = "0.1.0"
-dependencies = [
- "embedded-hal",
-]
-
-[[package]]
 name = "debug-helper"
 version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76fbd10dce159c002b9c688ae8ab7cd531151e185e0ad360f4bfea3b0eede3a8"
-
-[[package]]
-name = "derivative"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "either"
@@ -255,12 +199,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "encode_unicode"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
-
-[[package]]
 name = "float-cmp"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,12 +223,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
-name = "log"
-version = "0.4.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
+name = "macropad"
+version = "0.1.0"
 dependencies = [
- "cfg-if",
+ "adafruit-macropad",
+ "cortex-m",
+ "cortex-m-rt",
+ "embedded-graphics",
+ "embedded-hal",
+ "embedded-text",
+ "embedded-time",
+ "panic-persist",
+ "rp2040-boot2",
+ "sh1106",
 ]
 
 [[package]]
@@ -385,19 +330,18 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.5.5"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "085fe377a4b2805c0fbc09484415ec261174614b7f080b0e0d520456ac421a67"
+checksum = "720d3ea1055e4e4574c0c0b0f8c3fd4f24c4cdaf465948206dea090b57b526ad"
 dependencies = [
- "derivative",
  "num_enum_derive",
 ]
 
 [[package]]
 name = "num_enum_derive"
-version = "0.5.5"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5249369707a1e07b39f78d98c8f34e00aca7dcb053812fdbb5ad7be82c1bba38"
+checksum = "0d992b768490d7fe0d8586d9b5745f6c49f557da6d81dc982b1d167ad4edbb21"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -409,6 +353,15 @@ name = "object-chain"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41af26158b0f5530f7b79955006c2727cd23d0d8e7c3109dc316db0a919784dd"
+
+[[package]]
+name = "panic-persist"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32bb382689ecd2c4d2d4df9fd56700ba8d43b7b31cca11018cc0e6f8aef39fd5"
+dependencies = [
+ "cortex-m",
+]
 
 [[package]]
 name = "paste"
@@ -438,9 +391,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.14"
+version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47aa80447ce4daf1717500037052af176af5d38cc3e571d9ec1c7353fc10c87d"
+checksum = "864d3e96a899863136fc6e99f3d7cae289dafe43bf2c5ac19b70df7210c0a145"
 dependencies = [
  "proc-macro2",
 ]
@@ -467,15 +420,6 @@ name = "regex-syntax"
 version = "0.6.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
-
-[[package]]
-name = "rgb"
-version = "0.8.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a374af9a0e5fdcdd98c1c7b64f05004f9ea2555b6c75f211daa81268a3c50f1"
-dependencies = [
- "bytemuck",
-]
 
 [[package]]
 name = "riscv"
@@ -564,12 +508,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
-name = "serde"
-version = "1.0.132"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b9875c23cf305cd1fd7eb77234cbb705f21ea6a72c637a5c6db5fe4b8e7f008"
-
-[[package]]
 name = "sh1106"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -580,38 +518,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "smart-leds"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38dd45fa275f70b4110eac5f5182611ad384f88bb22b68b9a9c3cafd7015290b"
-dependencies = [
- "smart-leds-trait",
-]
-
-[[package]]
-name = "smart-leds-trait"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebf6d833fa93f16a1c1874e62c2aebe8567e5bdd436d59bf543ed258b6f7a8e3"
-dependencies = [
- "rgb",
-]
-
-[[package]]
-name = "ssmarshal"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3e6ad23b128192ed337dfa4f1b8099ced0c2bf30d61e551b65fda5916dbb850"
-dependencies = [
- "encode_unicode",
- "serde",
-]
-
-[[package]]
 name = "syn"
-version = "1.0.84"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecb2e6da8ee5eb9a61068762a32fa9619cc591ceb055b3687f4cd4051ec2e06b"
+checksum = "8a65b3f4ffa0092e9887669db0eae07941f023991ab58ea44da8fe8e2d511c6b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -629,52 +539,6 @@ name = "usb-device"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6be90410d4772074ea49525e2e753b65920b94b57eee21a6ef7b6a6fe6296245"
-
-[[package]]
-name = "usbd-hid"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "183b7e65bbd75512aedf250deda89394c74ae3118b79fe41f159e8503e1d5d7f"
-dependencies = [
- "serde",
- "ssmarshal",
- "usb-device",
- "usbd-hid-macros",
-]
-
-[[package]]
-name = "usbd-hid-descriptors"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e00430c0b39caf3957aba6c2b2824f8e70e1ac0278941418bf1fe35f9566d64"
-dependencies = [
- "bitfield",
-]
-
-[[package]]
-name = "usbd-hid-macros"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78bd005b3aa54e62905d99df49a75d11888bb958eb780adb5e8f2029733077df"
-dependencies = [
- "byteorder",
- "proc-macro2",
- "quote",
- "serde",
- "syn",
- "usbd-hid-descriptors",
-]
-
-[[package]]
-name = "usbd-serial"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db75519b86287f12dcf0d171c7cf4ecc839149fe9f3b720ac4cfce52959e1dfe"
-dependencies = [
- "embedded-hal",
- "nb 0.1.3",
- "usb-device",
-]
 
 [[package]]
 name = "vcell"
@@ -695,18 +559,4 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ee8f19f9d74293faf70901bc20ad067dc1ad390d2cbf1e3f75f721ffee908b6"
 dependencies = [
  "vcell",
-]
-
-[[package]]
-name = "ws2812-pio"
-version = "0.1.0"
-source = "git+https://github.com/ithinuel/ws2812-pio-rs#83fc175fd99f230e477f6fc4a0802e29fd8dcd6f"
-dependencies = [
- "cortex-m",
- "embedded-hal",
- "embedded-time",
- "nb 1.0.0",
- "pio",
- "rp2040-hal",
- "smart-leds-trait",
 ]

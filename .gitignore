@@ -2,8 +2,8 @@
 **/Cargo.lock
 .#*
 .gdb_history
-target/
+target
 
 # editor files
-.idea/*
-.vscode/*
+.idea
+.vscode
