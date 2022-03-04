@@ -13,7 +13,7 @@ use embedded_text::style::{HeightMode, TextBoxStyleBuilder, VerticalOverdraw};
 use embedded_text::TextBox;
 use sh1106::prelude::*;
 
-pub(crate) fn display_and_reboot<DI, E>(msg: &str, mut display: GraphicsMode<DI>, reboot_pin: &dyn InputPin<Error = Infallible>) -> !
+pub fn display_and_reboot<DI, E>(msg: &str, mut display: GraphicsMode<DI>, reboot_pin: &dyn InputPin<Error = Infallible>) -> !
     where
         DI: sh1106::interface::DisplayInterface<Error = E>,
         E: core::fmt::Debug
