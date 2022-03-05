@@ -2,7 +2,6 @@
 #![no_main]
 
 use core::cell::Cell;
-use core::fmt::Write;
 
 use adafruit_macropad::{
     hal::{
@@ -16,41 +15,28 @@ use cortex_m::interrupt::Mutex;
 use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m_rt::entry;
 use cortex_m_rt::exception;
-use embedded_graphics::geometry::Point;
-use embedded_graphics::mono_font::ascii::FONT_4X6;
-use embedded_graphics::mono_font::MonoTextStyle;
-use embedded_graphics::pixelcolor::BinaryColor;
-use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::Rectangle;
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::digital::v2::ToggleableOutputPin;
-use embedded_text::alignment::{HorizontalAlignment, VerticalAlignment};
-use embedded_text::style::{HeightMode, TextBoxStyleBuilder, VerticalOverdraw};
-use embedded_text::TextBox;
-use embedded_time::duration::Seconds;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Hertz;
-use embedded_time::Clock as _;
 use log::LevelFilter;
 use panic_persist as _;
 use sh1106::prelude::*;
 
+use crate::display_controller::DisplayController;
 use crate::logger::Logger;
+use crate::macropad_model::MacropadModel;
 use crate::timer_clock::TimerClock;
 
 mod display_controller;
-mod keypad_model;
 mod led_controller;
-mod log_model;
 mod logger;
-mod macropad_controller;
 mod macropad_model;
+mod number_view;
 mod panic_display;
-mod rotary_encoder_model;
-mod sound_controller;
+mod text_view;
 mod timer_clock;
-mod usb_model;
 
 pub const MAX_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 pub const XOSC_CRYSTAL_FREQ: Hertz = Hertz(12_000_000);
@@ -68,6 +54,8 @@ fn main() -> ! {
             .map(|()| log::set_max_level(MAX_LOG_LEVEL))
             .unwrap();
     }
+
+    log::info!("Starting");
 
     let mut pac = pac::Peripherals::take().unwrap();
     let mut core = pac::CorePeripherals::take().unwrap();
@@ -120,12 +108,16 @@ fn main() -> ! {
         .into();
     display.init().unwrap();
     display.flush().unwrap();
+    log::info!("Display initialised");
 
     let button = pins.button.into_pull_up_input();
+    let key12 = pins.key12.into_pull_up_input();
+
     if let Some(msg) = panic_persist::get_panic_message_utf8() {
         //NB never returns
         panic_display::display_and_reboot(msg, display, &button);
     }
+    log::info!("No persisted panic");
 
     let clock = TimerClock::new(hal::Timer::new(pac.TIMER, &mut pac.RESETS));
 
@@ -135,9 +127,12 @@ fn main() -> ! {
             .set(Some(pins.led.into_push_pull_output()))
     });
 
+    let macropad_model = MacropadModel::new(display, &clock, &key12);
+    let mut macropad_controller = DisplayController::new(macropad_model);
+
     //100 mico seconds
     // let reload_value = (clocks.system_clock.freq() / 10_000).integer() - 1;
-    let reload_value = 100_000 - 1;
+    let reload_value = 1_000 - 1;
     core.SYST.set_reload(reload_value);
     core.SYST.clear_current();
     //External clock, driven by the Watchdog - 1 tick per us
@@ -145,41 +140,16 @@ fn main() -> ! {
     core.SYST.enable_interrupt();
     core.SYST.enable_counter();
     //NB Safety - interrupts enabled from this point onwards
+    log::info!("Timer enabled");
 
-    let mut second_timer = clock
-        .new_timer(Seconds(1u32))
-        .into_periodic()
-        .start()
-        .unwrap();
-    let mut seconds = 0u32;
-
+    log::info!("Entering main loop");
     loop {
-        cortex_m::asm::nop();
         if button.is_low().unwrap() {
             //USB boot with pin 13 for usb activity
             hal::rom_data::reset_to_usb_boot(0x1 << 13, 0x0);
         }
 
-        if second_timer.period_complete().unwrap() {
-            seconds += 1;
-            display.clear();
-
-            let mut buffer = heapless::String::<16>::new();
-            write!(&mut buffer, "{}", seconds).unwrap();
-
-            let character_style = MonoTextStyle::new(&FONT_4X6, BinaryColor::On);
-            let text_box_style = TextBoxStyleBuilder::new()
-                .height_mode(HeightMode::Exact(VerticalOverdraw::FullRowsOnly))
-                .alignment(HorizontalAlignment::Left)
-                .vertical_alignment(VerticalAlignment::Bottom)
-                .build();
-            let bounds = Rectangle::new(Point::zero(), Size::new(128, 64));
-            let text_box =
-                TextBox::with_textbox_style(&buffer, bounds, character_style, text_box_style);
-
-            text_box.draw(&mut display).unwrap();
-            display.flush().unwrap();
-        }
+        macropad_controller.tick();
     }
 }
 
@@ -194,6 +164,5 @@ fn SysTick() {
 
     if let Some(led) = LED {
         led.toggle().unwrap();
-        panic!("0\n1\n2\n3\n4\n5\n6\n7\n8\n")
     }
 }

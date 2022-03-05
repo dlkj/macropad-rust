@@ -8,7 +8,7 @@ use log::{Level, Metadata, Record};
 use crate::Mutex;
 
 const BUFFER_SIZE: usize = 512;
-const TRUNCATE_SIZE: usize = 32 * 9;
+const TRUNCATE_SIZE: usize = 32 * 10;
 
 pub struct Logger {
     buffer: Mutex<RefCell<String<BUFFER_SIZE>>>,
@@ -37,19 +37,26 @@ impl log::Log for Logger {
 
         cortex_m::interrupt::free(|cs| {
             let buffer_ref = self.buffer.borrow(cs);
-            let mut buffer = buffer_ref.borrow_mut();
 
-            if buffer.len() + log_str.len() > buffer.capacity() {
-                if log_str.len() >= TRUNCATE_SIZE {
-                    let s = &log_str.as_str()[log_str.len() - TRUNCATE_SIZE..];
-                    buffer_ref.replace(String::from(s));
-                } else {
-                    let s = &buffer.as_str()[buffer.len() + log_str.len() - TRUNCATE_SIZE..];
-                    buffer_ref.replace(String::from(s));
-                    buffer_ref.borrow_mut().push_str(&log_str).unwrap();
+            {
+                let mut buffer = buffer_ref.borrow_mut();
+                if buffer.len() + log_str.len() <= buffer.capacity() {
+                    buffer.push_str(&log_str).unwrap();
+                    return;
                 }
+            }
+
+            if log_str.len() >= TRUNCATE_SIZE {
+                let s = &log_str.as_str()[log_str.len() - TRUNCATE_SIZE..];
+                buffer_ref.replace(String::from(s));
             } else {
-                buffer.push_str(&log_str).unwrap()
+                let truncated_log = {
+                    let buffer = buffer_ref.borrow();
+                    let s = &buffer.as_str()[buffer.len() + log_str.len() - TRUNCATE_SIZE..];
+                    String::from(s)
+                };
+                buffer_ref.replace(truncated_log);
+                buffer_ref.borrow_mut().push_str(&log_str).unwrap();
             }
         });
     }
@@ -78,5 +85,12 @@ impl Logger {
             Level::Debug => "D",
             Level::Trace => "T",
         }
+    }
+
+    pub fn log_buffer(&self) -> String<BUFFER_SIZE> {
+        cortex_m::interrupt::free(|cs| {
+            let buffer_ref = self.buffer.borrow(cs);
+            String::from(buffer_ref.borrow().as_str())
+        })
     }
 }
