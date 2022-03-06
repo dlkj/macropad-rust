@@ -25,15 +25,27 @@ sh1106 = "0.4"
 embedded-graphics = "0.7"
 embedded-text = { version = "0.5", default-features = false }
 heapless = { version = "0.7"}
+atomic-polyfill = "0.1"
+usb-device= "0.2"
+usbd-hid-devices = { git = "https://github.com/dlkj/usbd-hid-devices" }
+frunk = { version = "0.4", default-features = false }
 
-
-#usb-device= "0.2"
 #usbd-serial = "0.1"
 #usbd-hid = "0.5"
 #pio = { version = "0.1" }
 #ws2812-pio = { git = "https://github.com/ithinuel/ws2812-pio-rs", rev = "83fc175fd99f230e477f6fc4a0802e29fd8dcd6f" }
 #smart-leds = "0.3"
 #log = "0.4"
+
+# cargo build/run
+[profile.dev]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+#NB USB may fail to init on windows if otp-level is not set
+opt-level = 3
+overflow-checks = true
 
 [profile.release]
 codegen-units = 1 # better optimizations

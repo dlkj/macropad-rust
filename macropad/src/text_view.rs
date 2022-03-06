@@ -38,10 +38,6 @@ impl<const N: usize> Drawable for TextView<N> {
 
         let character_style = MonoTextStyle::new(&FONT_4X6, BinaryColor::On);
 
-        // Text::new(text, Point::zero(), character_style)
-        //     .draw(display)
-        //     .map(|_| ())
-
         let text_box_style = TextBoxStyleBuilder::new()
             .vertical_alignment(VerticalAlignment::Bottom)
             .build();

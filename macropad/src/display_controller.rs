@@ -1,35 +1,46 @@
-use crate::MacropadModel;
+use crate::{PeripheralsModel, UsbModel};
 
-use crate::macropad_model::DisplayMode;
-use crate::number_view::NumberView;
+use crate::models::{ApplicationModel, ApplicationView, DisplayModel};
+use crate::status_view::StatusView;
 use crate::text_view::TextView;
 use embedded_time::Clock;
 use sh1106::interface::DisplayInterface;
 
-pub struct DisplayController<'a, DI: DisplayInterface, C: Clock<T = u32>> {
-    model: MacropadModel<'a, DI, C>,
-}
+#[derive(Default)]
+pub struct DisplayController {}
 
-impl<'a, DI: DisplayInterface, C: Clock<T = u32>> DisplayController<'a, DI, C> {
-    pub fn tick(&mut self) {
-        if self.model.display_update_due() {
-            self.update_display()
+impl DisplayController {
+    pub fn tick<DI: DisplayInterface, C: Clock<T = u64>>(
+        &self,
+        display_model: &mut DisplayModel<'_, DI, C>,
+        macropad_model: &PeripheralsModel<'_, C>,
+        app_model: &ApplicationModel,
+        usb_model: &UsbModel<'_>,
+    ) {
+        if display_model.display_update_due() {
+            self.update_display(display_model, macropad_model, app_model, usb_model)
         }
     }
 
-    fn update_display(&mut self) {
-        match self.model.display_mode() {
-            DisplayMode::Log => {
-                self.model.display_draw(TextView::new(self.model.log()));
+    fn update_display<DI: DisplayInterface, C: Clock<T = u64>>(
+        &self,
+        display_model: &mut DisplayModel<'_, DI, C>,
+        macropad_model: &PeripheralsModel<'_, C>,
+        app_model: &ApplicationModel,
+        usb_model: &UsbModel<'_>,
+    ) {
+        match app_model.active_view() {
+            ApplicationView::Log => {
+                display_model.display_draw(TextView::new(macropad_model.log_lines()));
             }
-            DisplayMode::Time => {
-                self.model
-                    .display_draw(NumberView::new(self.model.ticks_since_epoc()));
+            ApplicationView::Status => {
+                display_model.display_draw(StatusView::new(
+                    macropad_model.ticks_since_epoc(),
+                    app_model.key_values(),
+                    usb_model.keyboard_leds(),
+                    usb_model.usb_state(),
+                ));
             }
         }
-    }
-
-    pub fn new(model: MacropadModel<'a, DI, C>) -> Self {
-        Self { model }
     }
 }

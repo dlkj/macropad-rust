@@ -1,40 +1,52 @@
 #![no_std]
 #![no_main]
 
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
+use core::convert::Infallible;
+use core::sync::atomic::Ordering;
 
 use adafruit_macropad::{
     hal::{
         self as hal,
         clocks::Clock,
-        pac::{self},
+        pac::{self, interrupt},
     },
     Pins,
 };
+use atomic_polyfill::AtomicU8;
 use cortex_m::interrupt::Mutex;
 use cortex_m::peripheral::syst::SystClkSource;
-use cortex_m_rt::entry;
-use cortex_m_rt::exception;
-use embedded_hal::digital::v2::InputPin;
-use embedded_hal::digital::v2::OutputPin;
-use embedded_hal::digital::v2::ToggleableOutputPin;
+use cortex_m_rt::{entry, exception};
+use embedded_hal::digital::v2::{InputPin, OutputPin, ToggleableOutputPin};
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Hertz;
+use frunk::HList;
 use log::LevelFilter;
 use panic_persist as _;
 use sh1106::prelude::*;
+use usb_device::class_prelude::*;
+use usb_device::prelude::*;
+use usbd_hid_devices::device::consumer::ConsumerControlInterface;
+use usbd_hid_devices::device::keyboard::NKROBootKeyboardInterface;
+use usbd_hid_devices::device::mouse::WheelMouseInterface;
+use usbd_hid_devices::prelude::*;
 
+use crate::debounce::DebouncedInputPin;
+use crate::debounced_input_array::DebouncedInputArray;
 use crate::display_controller::DisplayController;
+use crate::keypad_controller::KeypadController;
 use crate::logger::Logger;
-use crate::macropad_model::MacropadModel;
+use crate::models::{ApplicationModel, DisplayModel, PeripheralsModel, UsbModel};
 use crate::timer_clock::TimerClock;
 
+mod debounce;
+mod debounced_input_array;
 mod display_controller;
-mod led_controller;
+mod keypad_controller;
 mod logger;
-mod macropad_model;
-mod number_view;
+mod models;
 mod panic_display;
+mod status_view;
 mod text_view;
 mod timer_clock;
 
@@ -42,9 +54,25 @@ pub const MAX_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 pub const XOSC_CRYSTAL_FREQ: Hertz = Hertz(12_000_000);
 
 type LedPin = hal::gpio::Pin<hal::gpio::pin::bank0::Gpio13, hal::gpio::PushPullOutput>;
+type UsbState = (
+    UsbDevice<'static, hal::usb::UsbBus>,
+    UsbHidClass<
+        hal::usb::UsbBus,
+        HList!(
+            ConsumerControlInterface<'static, hal::usb::UsbBus>,
+            WheelMouseInterface<'static, hal::usb::UsbBus>,
+            NKROBootKeyboardInterface<'static, hal::usb::UsbBus, TimerClock>,
+        ),
+    >,
+);
+pub type DynInputPin = dyn InputPin<Error = Infallible>;
 
 static LOGGER: Logger = Logger::default();
 static SYSTICK_STATE: Mutex<Cell<Option<LedPin>>> = Mutex::new(Cell::new(None));
+static USBCTRL_SHARED: Mutex<RefCell<Option<UsbState>>> = Mutex::new(RefCell::new(None));
+
+static KEYBOARD_LEDS: AtomicU8 = AtomicU8::new(0);
+static KEYS: DebouncedInputArray<13> = DebouncedInputArray::new();
 
 #[entry]
 fn main() -> ! {
@@ -110,16 +138,79 @@ fn main() -> ! {
     display.flush().unwrap();
     log::info!("Display initialised");
 
-    let button = pins.button.into_pull_up_input();
-    let key12 = pins.key12.into_pull_up_input();
-
     if let Some(msg) = panic_persist::get_panic_message_utf8() {
         //NB never returns
-        panic_display::display_and_reboot(msg, display, &button);
+        panic_display::display_and_reboot(msg, display, &pins.button.into_pull_up_input());
     }
     log::info!("No persisted panic");
+    static mut CLOCK: Option<TimerClock> = None;
+    //Safety: interrupts not enabled yet
+    let clock = unsafe {
+        CLOCK = Some(TimerClock::new(hal::Timer::new(pac.TIMER, &mut pac.RESETS)));
+        CLOCK.as_ref().unwrap()
+    };
 
-    let clock = TimerClock::new(hal::Timer::new(pac.TIMER, &mut pac.RESETS));
+    static mut USB_ALLOC: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
+
+    //Safety: interrupts not enabled yet
+    let usb_alloc = unsafe {
+        USB_ALLOC = Some(UsbBusAllocator::new(hal::usb::UsbBus::new(
+            pac.USBCTRL_REGS,
+            pac.USBCTRL_DPRAM,
+            clocks.usb_clock,
+            true,
+            &mut pac.RESETS,
+        )));
+        USB_ALLOC.as_ref().unwrap()
+    };
+
+    let usb_hid = UsbHidClassBuilder::new()
+        .add_interface(
+            usbd_hid_devices::device::keyboard::NKROBootKeyboardInterface::default_config(clock),
+        )
+        .add_interface(usbd_hid_devices::device::mouse::WheelMouseInterface::default_config())
+        .add_interface(
+            usbd_hid_devices::device::consumer::ConsumerControlInterface::default_config(),
+        )
+        //Build
+        .build(usb_alloc);
+
+    let usb_device = UsbDeviceBuilder::new(usb_alloc, UsbVidPid(0x1209, 0x0005))
+        .manufacturer("usbd-hid-devices")
+        .product("Macropad")
+        .serial_number("TEST")
+        .supports_remote_wakeup(false)
+        .build();
+
+    cortex_m::interrupt::free(|cs| {
+        USBCTRL_SHARED
+            .borrow(cs)
+            .replace(Some((usb_device, usb_hid)));
+    });
+    //NB Safety - interrupts enabled from this point onwards
+    unsafe {
+        pac::NVIC::unmask(hal::pac::Interrupt::USBCTRL_IRQ);
+    };
+    log::info!("USB configured");
+
+    // let encoder_rota = pins.encoder_rota.into_pull_up_input();
+    // let encoder_rotb = pins.encoder_rotb.into_pull_up_input();
+
+    KEYS.set_pins([
+        pins.key1.into_pull_up_input().into(),
+        pins.key2.into_pull_up_input().into(),
+        pins.key3.into_pull_up_input().into(),
+        pins.key4.into_pull_up_input().into(),
+        pins.key5.into_pull_up_input().into(),
+        pins.key6.into_pull_up_input().into(),
+        pins.key7.into_pull_up_input().into(),
+        pins.key8.into_pull_up_input().into(),
+        pins.key9.into_pull_up_input().into(),
+        pins.key10.into_pull_up_input().into(),
+        pins.key11.into_pull_up_input().into(),
+        pins.key12.into_pull_up_input().into(),
+        pins.button.into_pull_up_input().into(),
+    ]);
 
     cortex_m::interrupt::free(|cs| {
         SYSTICK_STATE
@@ -127,8 +218,13 @@ fn main() -> ! {
             .set(Some(pins.led.into_push_pull_output()))
     });
 
-    let macropad_model = MacropadModel::new(display, &clock, &key12);
-    let mut macropad_controller = DisplayController::new(macropad_model);
+    let mut macropad_model = PeripheralsModel::new(clock, &KEYS);
+    let mut display_model = DisplayModel::new(display, clock);
+    let mut app_model = ApplicationModel::default();
+    let mut usb_model = UsbModel::new(&USBCTRL_SHARED, &KEYBOARD_LEDS);
+
+    let keypad_controller = KeypadController::default();
+    let display_controller = DisplayController::default();
 
     //100 mico seconds
     // let reload_value = (clocks.system_clock.freq() / 10_000).integer() - 1;
@@ -139,17 +235,13 @@ fn main() -> ! {
     core.SYST.set_clock_source(SystClkSource::External);
     core.SYST.enable_interrupt();
     core.SYST.enable_counter();
-    //NB Safety - interrupts enabled from this point onwards
-    log::info!("Timer enabled");
+
+    log::info!("Interrupts enabled");
 
     log::info!("Entering main loop");
     loop {
-        if button.is_low().unwrap() {
-            //USB boot with pin 13 for usb activity
-            hal::rom_data::reset_to_usb_boot(0x1 << 13, 0x0);
-        }
-
-        macropad_controller.tick();
+        keypad_controller.tick(&mut macropad_model, &mut app_model, &mut usb_model);
+        display_controller.tick(&mut display_model, &macropad_model, &app_model, &usb_model);
     }
 }
 
@@ -165,4 +257,41 @@ fn SysTick() {
     if let Some(led) = LED {
         led.toggle().unwrap();
     }
+    KEYS.tick();
+    cortex_m::asm::sev();
+}
+
+#[allow(non_snake_case)]
+#[interrupt]
+fn USBCTRL_IRQ() {
+    cortex_m::interrupt::free(|cs| {
+        let mut usb_ref = USBCTRL_SHARED.borrow(cs).borrow_mut();
+        if usb_ref.is_none() {
+            panic!("Keyboard not available to IRQ");
+
+            //return;
+        }
+
+        let (ref mut usb_device, ref mut usb_hid) = usb_ref.as_mut().unwrap();
+        if usb_device.poll(&mut [usb_hid]) {
+            let keyboard = usb_hid.interface::<NKROBootKeyboardInterface<'_, _, _>, _>();
+            match keyboard.read_report() {
+                Err(UsbError::WouldBlock) => {}
+                Err(e) => {
+                    panic!("Failed to read keyboard report: {:?}", e)
+                }
+                Ok(l) => {
+                    KEYBOARD_LEDS.store(
+                        if l.num_lock { 1 } else { 0 }
+                            | if l.caps_lock { 2 } else { 0 }
+                            | if l.scroll_lock { 4 } else { 0 }
+                            | if l.compose { 8 } else { 0 }
+                            | if l.kana { 16 } else { 0 },
+                        Ordering::Relaxed,
+                    );
+                }
+            }
+        }
+    });
+    cortex_m::asm::sev();
 }
