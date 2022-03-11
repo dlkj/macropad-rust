@@ -37,18 +37,19 @@ use crate::display_controller::DisplayController;
 use crate::keypad_controller::KeypadController;
 use crate::logger::Logger;
 use crate::models::{ApplicationModel, DisplayModel, PeripheralsModel, UsbModel};
-use crate::timer_clock::TimerClock;
+use crate::time::TimerClock;
 
 mod debounce;
 mod debounced_input_array;
 mod display_controller;
 mod keypad_controller;
+mod keypad_view;
 mod logger;
 mod models;
 mod panic_display;
 mod status_view;
 mod text_view;
-mod timer_clock;
+mod time;
 
 pub const MAX_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 pub const XOSC_CRYSTAL_FREQ: Hertz = Hertz(12_000_000);
@@ -241,7 +242,12 @@ fn main() -> ! {
     log::info!("Entering main loop");
     loop {
         keypad_controller.tick(&mut macropad_model, &mut app_model, &mut usb_model);
-        display_controller.tick(&mut display_model, &macropad_model, &app_model, &usb_model);
+        display_controller.tick(
+            &mut display_model,
+            &macropad_model,
+            &mut app_model,
+            &usb_model,
+        );
     }
 }
 

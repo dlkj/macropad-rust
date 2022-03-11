@@ -1,8 +1,11 @@
 use crate::{PeripheralsModel, UsbModel};
 
+use crate::keypad_view::KeypadView;
 use crate::models::{ApplicationModel, ApplicationView, DisplayModel};
 use crate::status_view::StatusView;
 use crate::text_view::TextView;
+use crate::time::Stopwatch;
+use embedded_time::duration::Microseconds;
 use embedded_time::Clock;
 use sh1106::interface::DisplayInterface;
 
@@ -14,11 +17,18 @@ impl DisplayController {
         &self,
         display_model: &mut DisplayModel<'_, DI, C>,
         macropad_model: &PeripheralsModel<'_, C>,
-        app_model: &ApplicationModel,
+        app_model: &mut ApplicationModel,
         usb_model: &UsbModel<'_>,
     ) {
         if display_model.display_update_due() {
-            self.update_display(display_model, macropad_model, app_model, usb_model)
+            let stopwatch = Stopwatch::new(macropad_model.clock()).unwrap();
+            let f = display_model.frame_clounter_get_and_increment();
+            // if f > 0 {
+            self.update_display(display_model, macropad_model, app_model, usb_model, f);
+            // } else {
+            //     display_model.display_clear();
+            // }
+            app_model.set_display_time(stopwatch.elaspsed().unwrap());
         }
     }
 
@@ -28,6 +38,7 @@ impl DisplayController {
         macropad_model: &PeripheralsModel<'_, C>,
         app_model: &ApplicationModel,
         usb_model: &UsbModel<'_>,
+        f: u8,
     ) {
         match app_model.active_view() {
             ApplicationView::Log => {
@@ -36,9 +47,18 @@ impl DisplayController {
             ApplicationView::Status => {
                 display_model.display_draw(StatusView::new(
                     macropad_model.ticks_since_epoc(),
-                    app_model.key_values(),
+                    app_model.key_presses(),
                     usb_model.keyboard_leds(),
                     usb_model.usb_state(),
+                ));
+            }
+            ApplicationView::Keypad => {
+                display_model.display_draw(KeypadView::new(
+                    app_model.actions(),
+                    usb_model.keyboard_leds() & 1 > 0,
+                    Microseconds::try_from(app_model.display_time()).unwrap(),
+                    Microseconds::try_from(app_model.keypad_time()).unwrap(),
+                    f,
                 ));
             }
         }

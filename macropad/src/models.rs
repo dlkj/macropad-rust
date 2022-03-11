@@ -1,3 +1,4 @@
+use crate::keypad_controller::{Action, KeyPress};
 use crate::{DebouncedInputArray, Mutex, UsbState, LOGGER};
 use atomic_polyfill::AtomicU8;
 use core::cell::RefCell;
@@ -5,10 +6,10 @@ use core::default::Default;
 use core::sync::atomic::Ordering;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::Drawable;
-use embedded_time::duration::Milliseconds;
+use embedded_time::duration::{Generic, Microseconds, Milliseconds};
 use embedded_time::timer::param::{Periodic, Running};
 use embedded_time::{Clock, Timer};
-use heapless::{String, Vec};
+use heapless::{FnvIndexSet, String};
 use sh1106::interface::DisplayInterface;
 use sh1106::prelude::*;
 use usb_device::device::UsbDeviceState;
@@ -16,7 +17,7 @@ use usbd_hid_devices::device::keyboard::NKROBootKeyboardInterface;
 use usbd_hid_devices::page::Keyboard;
 use usbd_hid_devices::UsbHidError;
 
-const DISPLAY_UPDATE: Milliseconds = Milliseconds(20);
+const DISPLAY_UPDATE: Microseconds = Microseconds(16667);
 const KEYPAD_UPDATE: Milliseconds = Milliseconds(20);
 
 pub struct UsbModel<'a> {
@@ -64,7 +65,9 @@ impl<'a> UsbModel<'a> {
 
 pub struct DisplayModel<'a, DI: DisplayInterface, C: Clock<T = u64>> {
     display: GraphicsMode<DI>,
-    display_update_timer: Timer<'a, Periodic, Running, C, Milliseconds>,
+    clock: &'a C,
+    display_update_timer: Timer<'a, Periodic, Running, C, Microseconds>,
+    frame_counter: u8,
 }
 
 impl<'a, DI: DisplayInterface, C: Clock<T = u64>> DisplayModel<'a, DI, C> {
@@ -77,7 +80,9 @@ impl<'a, DI: DisplayInterface, C: Clock<T = u64>> DisplayModel<'a, DI, C> {
 
         Self {
             display,
+            clock,
             display_update_timer,
+            frame_counter: 0,
         }
     }
 
@@ -87,25 +92,49 @@ impl<'a, DI: DisplayInterface, C: Clock<T = u64>> DisplayModel<'a, DI, C> {
         self.display.flush().ok();
     }
 
+    pub fn display_draw_overwrite<V: Drawable<Color = BinaryColor>>(&mut self, view: V) {
+        view.draw(&mut self.display).unwrap();
+        self.display.flush().ok();
+    }
+
+    pub fn display_clear(&mut self) {
+        self.display.clear();
+        self.display.flush().ok();
+    }
+
     pub fn display_update_due(&mut self) -> bool {
         //todo fix issues with overflow after 1h10m
         self.display_update_timer.period_complete().unwrap()
     }
+
+    pub fn frame_clounter_get_and_increment(&mut self) -> u8 {
+        let (mut frame, _) = self.frame_counter.overflowing_add(1);
+
+        if frame == 60 {
+            frame = 0;
+        }
+
+        self.frame_counter = frame;
+        frame
+    }
 }
 
 pub struct ApplicationModel {
-    key_values: Vec<usize, 16>,
+    key_presses: FnvIndexSet<KeyPress, 16>,
+    actions: FnvIndexSet<Action, 16>,
     active_view: ApplicationView,
+    display_time: Generic<u64>,
+    keypad_time: Generic<u64>,
 }
 
 impl ApplicationModel {
-    pub(crate) fn set_key_values<I: IntoIterator<Item = usize>>(&mut self, values: I) {
-        self.key_values.clear();
-        self.key_values.extend(values.into_iter());
+    pub(crate) fn set_key_presses<I: IntoIterator<Item = KeyPress>>(&mut self, key_presses: I) {
+        self.key_presses.clear();
+        self.key_presses.extend(key_presses.into_iter());
     }
 
-    pub(crate) fn key_values(&self) -> &[usize] {
-        self.key_values.as_slice()
+    pub(crate) fn key_presses(&self) -> &FnvIndexSet<KeyPress, 16> {
+        &self.key_presses
     }
     pub fn active_view(&self) -> ApplicationView {
         self.active_view
@@ -113,13 +142,39 @@ impl ApplicationModel {
     pub fn set_active_view(&mut self, active_view: ApplicationView) {
         self.active_view = active_view;
     }
+
+    pub fn actions(&self) -> &FnvIndexSet<Action, 16> {
+        &self.actions
+    }
+    pub fn set_actions<'a, I: IntoIterator<Item = &'a Action>>(&mut self, actions: I) {
+        self.actions.clear();
+        for action in actions.into_iter() {
+            self.actions.insert(*action).unwrap();
+        }
+    }
+    pub(crate) fn set_display_time(&mut self, time: Generic<u64>) {
+        self.display_time = time;
+    }
+    pub(crate) fn set_keypad_time(&mut self, time: Generic<u64>) {
+        self.keypad_time = time;
+    }
+
+    pub fn display_time(&self) -> Generic<u64> {
+        self.display_time
+    }
+    pub fn keypad_time(&self) -> Generic<u64> {
+        self.keypad_time
+    }
 }
 
 impl Default for ApplicationModel {
     fn default() -> Self {
         Self {
-            key_values: Vec::new(),
-            active_view: ApplicationView::Status,
+            key_presses: Default::default(),
+            actions: Default::default(),
+            active_view: ApplicationView::Keypad,
+            keypad_time: Default::default(),
+            display_time: Default::default(),
         }
     }
 }
@@ -131,7 +186,7 @@ pub struct PeripheralsModel<'a, C: Clock<T = u64>> {
 }
 
 impl<'a, C: Clock<T = u64>> PeripheralsModel<'a, C> {
-    pub(crate) fn key_pin_values(&self) -> [bool; 13] {
+    pub(crate) fn input_pin_values(&self) -> [bool; 13] {
         self.keys.values()
     }
 
@@ -170,10 +225,15 @@ impl<'a, C: Clock<T = u64>> PeripheralsModel<'a, C> {
         //USB boot with pin 13 for usb activity
         adafruit_macropad::hal::rom_data::reset_to_usb_boot(0x1 << 13, 0x0);
     }
+
+    pub fn clock(&self) -> &'a C {
+        self.clock
+    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ApplicationView {
     Log,
     Status,
+    Keypad,
 }
