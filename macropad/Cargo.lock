@@ -570,9 +570,9 @@ checksum = "d34f1408f55294453790c48b2f1ebbb1c5b4b7563eb1f418bcfcfdbb06ebb4e7"
 
 [[package]]
 name = "regex"
-version = "1.5.4"
+version = "1.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d07a8629359eb56f1e2fb1652bb04212c072a87ba68546a04065d525673ac461"
+checksum = "1a11647b6b25ff05a515cb92c365cec08801e83423a235b51e231e1808747286"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -734,13 +734,16 @@ checksum = "6be90410d4772074ea49525e2e753b65920b94b57eee21a6ef7b6a6fe6296245"
 [[package]]
 name = "usbd-hid-devices"
 version = "0.1.0"
-source = "git+https://github.com/dlkj/usbd-hid-devices#a0eb087ee88b0ef15ad1c8a2c935ee3e7c808bca"
+source = "git+https://github.com/dlkj/usbd-hid-devices#d21575e62cf90acf37b90355ff9fadd90f255344"
 dependencies = [
  "delegate",
  "embedded-time",
  "frunk",
+ "hash32",
+ "hash32-derive",
  "heapless",
  "log",
+ "num_enum",
  "packed_struct",
  "usb-device",
 ]
