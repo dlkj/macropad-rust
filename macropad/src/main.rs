@@ -46,6 +46,7 @@ mod keypad_controller;
 mod keypad_view;
 mod logger;
 mod models;
+mod overlays;
 mod panic_display;
 mod status_view;
 mod text_view;

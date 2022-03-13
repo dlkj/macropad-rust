@@ -87,19 +87,15 @@ impl<'a, DI: DisplayInterface, C: Clock<T = u64>> DisplayModel<'a, DI, C> {
     }
 
     pub fn display_draw<V: Drawable<Color = BinaryColor>>(&mut self, view: V) {
-        self.display.clear();
         view.draw(&mut self.display).unwrap();
-        self.display.flush().ok();
-    }
-
-    pub fn display_draw_overwrite<V: Drawable<Color = BinaryColor>>(&mut self, view: V) {
-        view.draw(&mut self.display).unwrap();
-        self.display.flush().ok();
     }
 
     pub fn display_clear(&mut self) {
         self.display.clear();
-        self.display.flush().ok();
+    }
+
+    pub fn display_flush(&mut self) {
+        self.display.flush();
     }
 
     pub fn display_update_due(&mut self) -> bool {
@@ -123,6 +119,7 @@ pub struct ApplicationModel {
     key_presses: FnvIndexSet<KeyPress, 16>,
     actions: FnvIndexSet<Action, 16>,
     active_view: ApplicationView,
+    active_overlay: Overlay,
     display_time: Generic<u64>,
     keypad_time: Generic<u64>,
 }
@@ -165,6 +162,9 @@ impl ApplicationModel {
     pub fn keypad_time(&self) -> Generic<u64> {
         self.keypad_time
     }
+    pub fn active_overlay(&self) -> Overlay {
+        self.active_overlay
+    }
 }
 
 impl Default for ApplicationModel {
@@ -173,6 +173,7 @@ impl Default for ApplicationModel {
             key_presses: Default::default(),
             actions: Default::default(),
             active_view: ApplicationView::Keypad,
+            active_overlay: Overlay::None,
             keypad_time: Default::default(),
             display_time: Default::default(),
         }
@@ -236,4 +237,10 @@ pub enum ApplicationView {
     Log,
     Status,
     Keypad,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum Overlay {
+    None,
+    ControllerTiming,
 }

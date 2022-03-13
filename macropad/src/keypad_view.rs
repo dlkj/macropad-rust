@@ -1,39 +1,22 @@
 use crate::keypad_controller::Action;
-use core::fmt::Write;
-use embedded_graphics::mono_font::ascii::{FONT_4X6, FONT_6X13_BOLD};
+use embedded_graphics::mono_font::ascii::FONT_6X13_BOLD;
 use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{PrimitiveStyle, Rectangle, RoundedRectangle};
 use embedded_graphics::text::{Alignment, Text};
 use embedded_graphics::Drawable;
-use embedded_time::duration::Microseconds;
 use heapless::FnvIndexSet;
 use usbd_hid_devices::page::Keyboard;
 
 pub struct KeypadView<'a> {
     actions: &'a FnvIndexSet<Action, 16>,
     num_lock: bool,
-    display_time: Microseconds,
-    keypad_time: Microseconds,
-    f: u8,
 }
 
 impl<'a> KeypadView<'a> {
-    pub(crate) fn new(
-        actions: &'a FnvIndexSet<Action, 16>,
-        num_lock: bool,
-        display_time: Microseconds,
-        keypad_time: Microseconds,
-        f: u8,
-    ) -> Self {
-        Self {
-            actions,
-            num_lock,
-            display_time,
-            keypad_time,
-            f,
-        }
+    pub(crate) fn new(actions: &'a FnvIndexSet<Action, 16>, num_lock: bool) -> Self {
+        Self { actions, num_lock }
     }
 
     fn draw_button<D>(
@@ -64,6 +47,7 @@ impl<'a> KeypadView<'a> {
         Ok(())
     }
 }
+
 impl<'a> Drawable for KeypadView<'a> {
     type Color = BinaryColor;
     type Output = ();
@@ -145,16 +129,6 @@ impl<'a> Drawable for KeypadView<'a> {
             BinaryColor::from(self.actions.contains(&Action::Key(Keyboard::KeypadEnter))),
         )?;
 
-        let mut buffer = heapless::String::<64>::new();
-        write!(
-            &mut buffer,
-            "k: {} ns\nd: {} ns\n{}",
-            self.keypad_time, self.display_time, self.f
-        )
-        .unwrap();
-
-        let character_style = MonoTextStyle::new(&FONT_4X6, BinaryColor::On);
-        Text::new(&buffer, Point::new(75, 45), character_style).draw(display)?;
         Ok(())
     }
 }
