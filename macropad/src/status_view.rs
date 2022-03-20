@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use crate::keypad_controller::KeyPress;
+use crate::keypad_controller::KeyState;
 use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::geometry::Point;
 use embedded_graphics::mono_font::ascii::FONT_4X6;
@@ -8,12 +8,11 @@ use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::text::Text;
 use embedded_graphics::Drawable;
-use heapless::FnvIndexSet;
 use usb_device::device::UsbDeviceState;
 
 pub struct StatusView<'a> {
     ticks: u64,
-    key_values: &'a FnvIndexSet<KeyPress, 16>,
+    key_values: &'a [KeyState; 13],
     keyboard_leds: u8,
     usb_state: UsbDeviceState,
 }
@@ -21,7 +20,7 @@ pub struct StatusView<'a> {
 impl<'a> StatusView<'a> {
     pub fn new(
         ticks: u64,
-        key_values: &'a FnvIndexSet<KeyPress, 16>,
+        key_values: &'a [KeyState; 13],
         keyboard_leds: u8,
 
         usb_state: UsbDeviceState,

@@ -36,7 +36,7 @@ use crate::debounced_input_array::DebouncedInputArray;
 use crate::display_controller::DisplayController;
 use crate::keypad_controller::KeypadController;
 use crate::logger::Logger;
-use crate::models::{ApplicationModel, DisplayModel, PeripheralsModel, UsbModel};
+use crate::models::{ApplicationModel, DisplayModel, KeypadModel, PeripheralsModel, UsbModel};
 use crate::time::TimerClock;
 
 mod debounce;
@@ -222,10 +222,11 @@ fn main() -> ! {
 
     let mut macropad_model = PeripheralsModel::new(clock, &KEYS);
     let mut display_model = DisplayModel::new(display, clock);
+    let mut key_model = KeypadModel::default();
     let mut app_model = ApplicationModel::default();
     let mut usb_model = UsbModel::new(&USBCTRL_SHARED, &KEYBOARD_LEDS);
 
-    let keypad_controller = KeypadController::default();
+    let mut keypad_controller = KeypadController::new(clock);
     let display_controller = DisplayController::default();
 
     //100 mico seconds
@@ -242,10 +243,16 @@ fn main() -> ! {
 
     log::info!("Entering main loop");
     loop {
-        keypad_controller.tick(&mut macropad_model, &mut app_model, &mut usb_model);
+        keypad_controller.tick(
+            &mut macropad_model,
+            &mut key_model,
+            &mut usb_model,
+            &mut app_model,
+        );
         display_controller.tick(
             &mut display_model,
             &macropad_model,
+            &mut key_model,
             &mut app_model,
             &usb_model,
         );

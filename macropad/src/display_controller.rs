@@ -1,7 +1,7 @@
 use crate::{PeripheralsModel, UsbModel};
 
 use crate::keypad_view::KeypadView;
-use crate::models::{ApplicationModel, ApplicationView, DisplayModel, Overlay};
+use crate::models::{ApplicationModel, ApplicationView, DisplayModel, KeypadModel, Overlay};
 use crate::overlays::TimingOverlayView;
 use crate::status_view::StatusView;
 use crate::text_view::TextView;
@@ -18,12 +18,19 @@ impl DisplayController {
         &self,
         display_model: &mut DisplayModel<'_, DI, C>,
         macropad_model: &PeripheralsModel<'_, C>,
+        key_model: &mut KeypadModel,
         app_model: &mut ApplicationModel,
         usb_model: &UsbModel<'_>,
     ) {
         if display_model.display_update_due() {
             let stopwatch = Stopwatch::new(macropad_model.clock()).unwrap();
-            self.update_display(display_model, macropad_model, app_model, usb_model);
+            self.update_display(
+                display_model,
+                macropad_model,
+                key_model,
+                app_model,
+                usb_model,
+            );
             app_model.set_display_time(stopwatch.elaspsed().unwrap());
         }
     }
@@ -32,6 +39,7 @@ impl DisplayController {
         &self,
         display_model: &mut DisplayModel<'_, DI, C>,
         macropad_model: &PeripheralsModel<'_, C>,
+        key_model: &KeypadModel,
         app_model: &ApplicationModel,
         usb_model: &UsbModel<'_>,
     ) {
@@ -45,14 +53,14 @@ impl DisplayController {
             ApplicationView::Status => {
                 display_model.display_draw(StatusView::new(
                     macropad_model.ticks_since_epoc(),
-                    app_model.key_presses(),
+                    key_model.key_states(),
                     usb_model.keyboard_leds(),
                     usb_model.usb_state(),
                 ));
             }
             ApplicationView::Keypad => {
                 display_model.display_draw(KeypadView::new(
-                    app_model.actions(),
+                    key_model.key_states(),
                     usb_model.keyboard_leds() & 1 > 0,
                 ));
             }
@@ -63,7 +71,7 @@ impl DisplayController {
             Overlay::ControllerTiming => {
                 display_model.display_draw(TimingOverlayView::new(
                     Microseconds::try_from(app_model.display_time()).unwrap(),
-                    Microseconds::try_from(app_model.keypad_time()).unwrap(),
+                    Microseconds::try_from(key_model.keypad_time()).unwrap(),
                     f,
                 ));
             }

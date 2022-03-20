@@ -1,4 +1,4 @@
-use crate::keypad_controller::{Action, KeyPress};
+use crate::keypad_controller::{Action, AppAction, KeyState};
 use crate::{DebouncedInputArray, Mutex, UsbState, LOGGER};
 use atomic_polyfill::AtomicU8;
 use core::cell::RefCell;
@@ -6,10 +6,11 @@ use core::default::Default;
 use core::sync::atomic::Ordering;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::Drawable;
+use embedded_hal::digital::v2::PinState;
 use embedded_time::duration::{Generic, Microseconds, Milliseconds};
 use embedded_time::timer::param::{Periodic, Running};
 use embedded_time::{Clock, Timer};
-use heapless::{FnvIndexSet, String};
+use heapless::{String, Vec};
 use sh1106::interface::DisplayInterface;
 use sh1106::prelude::*;
 use usb_device::device::UsbDeviceState;
@@ -65,7 +66,6 @@ impl<'a> UsbModel<'a> {
 
 pub struct DisplayModel<'a, DI: DisplayInterface, C: Clock<T = u64>> {
     display: GraphicsMode<DI>,
-    clock: &'a C,
     display_update_timer: Timer<'a, Periodic, Running, C, Microseconds>,
     frame_counter: u8,
 }
@@ -80,7 +80,6 @@ impl<'a, DI: DisplayInterface, C: Clock<T = u64>> DisplayModel<'a, DI, C> {
 
         Self {
             display,
-            clock,
             display_update_timer,
             frame_counter: 0,
         }
@@ -95,7 +94,7 @@ impl<'a, DI: DisplayInterface, C: Clock<T = u64>> DisplayModel<'a, DI, C> {
     }
 
     pub fn display_flush(&mut self) {
-        self.display.flush();
+        self.display.flush().ok();
     }
 
     pub fn display_update_due(&mut self) -> bool {
@@ -116,66 +115,93 @@ impl<'a, DI: DisplayInterface, C: Clock<T = u64>> DisplayModel<'a, DI, C> {
 }
 
 pub struct ApplicationModel {
-    key_presses: FnvIndexSet<KeyPress, 16>,
-    actions: FnvIndexSet<Action, 16>,
     active_view: ApplicationView,
     active_overlay: Overlay,
     display_time: Generic<u64>,
-    keypad_time: Generic<u64>,
+    last_actions: Vec<AppAction, 16>,
+}
+
+impl Default for ApplicationModel {
+    fn default() -> Self {
+        Self {
+            active_view: ApplicationView::Keypad,
+            active_overlay: Overlay::None,
+            display_time: Default::default(),
+            last_actions: Default::default(),
+        }
+    }
 }
 
 impl ApplicationModel {
-    pub(crate) fn set_key_presses<I: IntoIterator<Item = KeyPress>>(&mut self, key_presses: I) {
-        self.key_presses.clear();
-        self.key_presses.extend(key_presses.into_iter());
-    }
-
-    pub(crate) fn key_presses(&self) -> &FnvIndexSet<KeyPress, 16> {
-        &self.key_presses
-    }
     pub fn active_view(&self) -> ApplicationView {
         self.active_view
     }
     pub fn set_active_view(&mut self, active_view: ApplicationView) {
         self.active_view = active_view;
     }
+    pub fn active_overlay(&self) -> Overlay {
+        self.active_overlay
+    }
+    pub fn set_active_overlay(&mut self, active_overlay: Overlay) {
+        self.active_overlay = active_overlay;
+    }
+    pub(crate) fn set_display_time(&mut self, time: Generic<u64>) {
+        self.display_time = time;
+    }
+    pub fn display_time(&self) -> Generic<u64> {
+        self.display_time
+    }
 
-    pub fn actions(&self) -> &FnvIndexSet<Action, 16> {
+    pub fn last_actions(&self) -> &Vec<AppAction, 16> {
+        &self.last_actions
+    }
+
+    pub fn set_last_actions<'a, I: IntoIterator<Item = &'a AppAction>>(&mut self, last_actions: I) {
+        self.last_actions.clear();
+        for action in last_actions.into_iter() {
+            self.last_actions.push(*action).unwrap();
+        }
+    }
+}
+
+pub struct KeypadModel {
+    key_states: [KeyState; 13],
+    actions: Vec<Action, 32>,
+    keypad_time: Generic<u64>,
+}
+
+impl KeypadModel {
+    pub fn actions(&self) -> &Vec<Action, 32> {
         &self.actions
     }
     pub fn set_actions<'a, I: IntoIterator<Item = &'a Action>>(&mut self, actions: I) {
         self.actions.clear();
         for action in actions.into_iter() {
-            self.actions.insert(*action).unwrap();
+            self.actions.push(*action).unwrap();
         }
-    }
-    pub(crate) fn set_display_time(&mut self, time: Generic<u64>) {
-        self.display_time = time;
     }
     pub(crate) fn set_keypad_time(&mut self, time: Generic<u64>) {
         self.keypad_time = time;
     }
 
-    pub fn display_time(&self) -> Generic<u64> {
-        self.display_time
-    }
     pub fn keypad_time(&self) -> Generic<u64> {
         self.keypad_time
     }
-    pub fn active_overlay(&self) -> Overlay {
-        self.active_overlay
+
+    pub fn key_states(&self) -> &'_ [KeyState; 13] {
+        &self.key_states
+    }
+    pub fn set_key_states(&mut self, key_states: [KeyState; 13]) {
+        self.key_states = key_states;
     }
 }
 
-impl Default for ApplicationModel {
+impl Default for KeypadModel {
     fn default() -> Self {
         Self {
-            key_presses: Default::default(),
+            key_states: [KeyState::Up; 13],
             actions: Default::default(),
-            active_view: ApplicationView::Keypad,
-            active_overlay: Overlay::None,
             keypad_time: Default::default(),
-            display_time: Default::default(),
         }
     }
 }
@@ -187,7 +213,7 @@ pub struct PeripheralsModel<'a, C: Clock<T = u64>> {
 }
 
 impl<'a, C: Clock<T = u64>> PeripheralsModel<'a, C> {
-    pub(crate) fn input_pin_values(&self) -> [bool; 13] {
+    pub(crate) fn input_pin_values(&self) -> [PinState; 13] {
         self.keys.values()
     }
 

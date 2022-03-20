@@ -32,6 +32,7 @@ frunk = { version = "0.4", default-features = false }
 hash32 = "0.2"
 hash32-derive = "0.1"
 packed_struct = { version = "0.10", default-features = false }
+num-traits = { version = "0.2", default-features = false }
 
 #pio = { version = "0.1" }
 #ws2812-pio = { git = "https://github.com/ithinuel/ws2812-pio-rs", rev = "83fc175fd99f230e477f6fc4a0802e29fd8dcd6f" }
