@@ -31,7 +31,7 @@ embedded-text = {version = "0.5.0", default-features = false }
 smart-leds = "0.3"
 
 arrayvec = { version = "0.7.2", default-features = false }
-log = "0.4.14"
+log = "0.4.16"
 itertools = { version = "0.10.1", default-features = false }
 bitflags = "1.3"
 
