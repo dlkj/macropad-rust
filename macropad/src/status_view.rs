@@ -45,8 +45,16 @@ impl<'a> Drawable for StatusView<'a> {
         let mut buffer = heapless::String::<512>::new();
         write!(
             &mut buffer,
-            "keys: {:?}\nusb: {:?}\nleds: {:02X}\nclock: {}",
-            self.key_values, self.usb_state, self.keyboard_leds, self.ticks
+            "keys: {:013b}\nusb: {:?}\nleds: {:02X}\nclock: {}",
+            self.key_values.iter().enumerate().fold(0, |a, (i, k)| {
+                match k {
+                    KeyState::Down => a | 1 << i,
+                    _ => a,
+                }
+            }),
+            self.usb_state,
+            self.keyboard_leds,
+            self.ticks
         )
         .unwrap();
 

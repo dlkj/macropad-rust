@@ -3,7 +3,8 @@ use embedded_graphics::mono_font::ascii::FONT_4X6;
 use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
-use embedded_graphics::text::Text;
+use embedded_graphics::primitives::{PrimitiveStyle, Rectangle, StyledDrawable};
+use embedded_graphics::text::{Baseline, Text};
 use embedded_graphics::Drawable;
 use embedded_time::duration::Microseconds;
 
@@ -39,8 +40,12 @@ impl Drawable for TimingOverlayView {
         )
         .unwrap();
 
+        Rectangle::new(Point::new(73, 43), Size::new(128 - 73, 64 - 43))
+            .draw_styled(&PrimitiveStyle::with_fill(BinaryColor::Off), display)?;
+
         let character_style = MonoTextStyle::new(&FONT_4X6, BinaryColor::On);
-        Text::new(&buffer, Point::new(75, 45), character_style).draw(display)?;
+        Text::with_baseline(&buffer, Point::new(75, 45), character_style, Baseline::Top)
+            .draw(display)?;
         Ok(())
     }
 }
