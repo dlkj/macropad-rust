@@ -1,23 +1,10 @@
-use crate::models::{ApplicationModel, ApplicationView, KeypadModel, Overlay};
+use crate::models::application_model::{ApplicationModel, MenuState, Overlay};
+use crate::models::keypad_model::{KeyState, KeypadModel};
 use crate::time::Stopwatch;
 use crate::{PeripheralsModel, UsbModel};
 use embedded_hal::digital::v2::PinState;
-use embedded_time::duration::Milliseconds;
-use embedded_time::fixed_point::FixedPoint;
 use embedded_time::{Clock, Instant};
-use hash32_derive::Hash32;
-use heapless::Vec;
-use num_traits::Bounded;
 use usbd_hid_devices::page::Keyboard;
-
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
-pub enum KeyState {
-    Up,
-    Down,
-}
-
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash32)]
-pub struct Chord(pub usize);
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum Action {
@@ -31,8 +18,8 @@ pub enum Action {
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum AppAction {
     Bootloader,
-    ChangeView,
     ShowTimings,
+    ShowMenu,
 }
 
 // #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -44,163 +31,17 @@ pub enum AppAction {
 //     Pan(i8),
 // }
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
-pub enum Modifier {
-    //NoAction,
-    Single(Action),
-    TapHold(Action, Action),
-    //tap dance
-}
+pub struct KeypadController {}
 
-pub enum ModifierState<C: Clock> {
-    Single(Action),
-    TapHold(Action, Action, TapHoldState<C>),
-}
-
-pub struct TapHoldState<C: Clock> {
-    up: Instant<C>,
-    down: Instant<C>,
-}
-
-impl<C: Clock> TapHoldState<C> {
+impl KeypadController {
     pub fn new() -> Self {
-        Self {
-            up: Instant::new(C::T::min_value()),
-            down: Instant::new(C::T::min_value()),
-        }
+        Self {}
     }
-}
-
-impl<C: Clock<T = u64>> ModifierState<C> {
-    pub(crate) fn map(&mut self, key_state: KeyState, now: Instant<C>) -> Option<Action> {
-        const HOLD_DURATION: Milliseconds<u32> = Milliseconds(500u32);
-
-        match self {
-            ModifierState::Single(a) => match key_state {
-                KeyState::Down => Some(*a),
-                _ => None,
-            },
-            ModifierState::TapHold(a1, a2, ref mut s) => {
-                let last_key_state = if s.down <= s.up {
-                    KeyState::Up
-                } else {
-                    KeyState::Down
-                };
-
-                match (last_key_state, key_state) {
-                    (KeyState::Up, KeyState::Down) => {
-                        s.down = now;
-                        log::info!("KeyDown");
-                        None
-                    }
-                    (KeyState::Down, KeyState::Down) => {
-                        //emit hold?
-                        if Milliseconds::<u32>::try_from(now - s.down).unwrap() > HOLD_DURATION {
-                            Some(*a2)
-                        } else {
-                            None
-                        }
-                    }
-                    (KeyState::Down, KeyState::Up) => {
-                        s.up = now;
-                        log::info!(
-                            "KeyUp {}",
-                            Milliseconds::<u32>::try_from(now - s.down)
-                                .unwrap()
-                                .integer()
-                        );
-                        //emmit tap or hold?
-                        if Milliseconds::<u32>::try_from(now - s.down).unwrap() <= HOLD_DURATION {
-                            Some(*a1)
-                        } else {
-                            Some(*a2)
-                        }
-                    }
-                    (KeyState::Up, KeyState::Up) => {
-                        //emmit tap?
-                        if Milliseconds::<u32>::try_from(s.up - s.down).unwrap() <= HOLD_DURATION
-                            && Milliseconds::<u32>::try_from(s.up - s.down).unwrap()
-                                >= Milliseconds::<u32>::try_from(now - s.up).unwrap()
-                        {
-                            Some(*a1)
-                        } else {
-                            None
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub struct KeyMapper<'a, C: Clock<T = u64>, const N: usize> {
-    key_modifiers_states: [ModifierState<C>; N],
-    clock: &'a C,
-}
-
-impl<'a, C: Clock<T = u64>, const N: usize> KeyMapper<'a, C, N> {
-    pub fn new(clock: &'a C, modifiers: [Modifier; N]) -> Self {
-        Self {
-            clock,
-            key_modifiers_states: modifiers.map(|m| match m {
-                //Modifier::NoAction => ModifierState::None(m),
-                Modifier::Single(a) => ModifierState::Single(a),
-                Modifier::TapHold(a1, a2) => ModifierState::TapHold(a1, a2, TapHoldState::new()),
-            }),
-        }
-    }
-
-    pub(crate) fn map(&mut self, key_states: &[KeyState; N]) -> Vec<Action, N> {
-        let now = self.clock.try_now().unwrap();
-
-        key_states
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &k)| self.key_modifiers_states[i].map(k, now))
-            .collect()
-    }
-}
-
-pub struct KeypadController<'a, C: Clock<T = u64>> {
-    key_mapper: KeyMapper<'a, C, 13>,
-}
-
-impl<'a, C: Clock<T = u64>> KeypadController<'a, C> {
-    pub fn new(clock: &'a C) -> Self {
-        Self {
-            key_mapper: KeyMapper::new(
-                clock,
-                [
-                    Modifier::TapHold(
-                        Action::Keyboard(Keyboard::Keypad7),
-                        Action::App(AppAction::Bootloader),
-                    ),
-                    Modifier::Single(Action::Keyboard(Keyboard::Keypad8)),
-                    Modifier::TapHold(
-                        Action::Keyboard(Keyboard::Keypad9),
-                        Action::App(AppAction::ChangeView),
-                    ),
-                    Modifier::Single(Action::Keyboard(Keyboard::Keypad4)),
-                    Modifier::Single(Action::Keyboard(Keyboard::Keypad5)),
-                    Modifier::Single(Action::Keyboard(Keyboard::Keypad6)),
-                    Modifier::Single(Action::Keyboard(Keyboard::Keypad1)),
-                    Modifier::Single(Action::Keyboard(Keyboard::Keypad2)),
-                    Modifier::Single(Action::Keyboard(Keyboard::Keypad3)),
-                    Modifier::Single(Action::Keyboard(Keyboard::Keypad0)),
-                    Modifier::Single(Action::Keyboard(Keyboard::KeypadDot)),
-                    Modifier::Single(Action::Keyboard(Keyboard::KeypadEnter)),
-                    Modifier::TapHold(
-                        Action::Keyboard(Keyboard::KeypadNumLockAndClear),
-                        Action::App(AppAction::ShowTimings),
-                    ),
-                ],
-            ),
-        }
-    }
-    pub fn tick(
+    pub fn tick<C: Clock<T = u64>>(
         &mut self,
+        now: &Instant<C>,
         per_model: &mut PeripheralsModel<'_, C>,
-        key_model: &mut KeypadModel,
+        key_model: &mut KeypadModel<'_, C>,
         usb_model: &mut UsbModel<'_>,
         app_model: &mut ApplicationModel,
     ) {
@@ -216,12 +57,13 @@ impl<'a, C: Clock<T = u64>> KeypadController<'a, C> {
             });
 
             key_model.set_key_states(key_states);
+            if key_states.iter().any(|&k| k == KeyState::Down) {
+                key_model.set_last_keypress_time(now);
+            }
 
-            //map key presses to actions
-            let actions = self.key_mapper.map(key_model.key_states());
+            let actions = key_model.key_mapper().map(&key_states);
 
             key_model.set_actions(&actions);
-            let actions = key_model.actions();
 
             //process modifiers
 
@@ -241,13 +83,8 @@ impl<'a, C: Clock<T = u64>> KeypadController<'a, C> {
                     AppAction::Bootloader => {
                         per_model.reboot_into_bootloader();
                     }
-                    AppAction::ChangeView => {
-                        let next_view = match app_model.active_view() {
-                            ApplicationView::Log => ApplicationView::Status,
-                            ApplicationView::Status => ApplicationView::Keypad,
-                            ApplicationView::Keypad => ApplicationView::Log,
-                        };
-                        app_model.set_active_view(next_view);
+                    AppAction::ShowMenu => {
+                        app_model.set_menu(MenuState::Open(app_model.active_view()))
                     }
                     AppAction::ShowTimings => {
                         let next_overlay = match app_model.active_overlay() {

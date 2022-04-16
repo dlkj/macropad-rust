@@ -8,7 +8,7 @@ use core::sync::atomic::Ordering;
 use adafruit_macropad::{
     hal::{
         self as hal,
-        clocks::Clock,
+        clocks::Clock as _,
         pac::{self, interrupt},
     },
     Pins,
@@ -20,8 +20,11 @@ use cortex_m_rt::{entry, exception};
 use embedded_hal::digital::v2::{InputPin, OutputPin, ToggleableOutputPin};
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Hertz;
+use embedded_time::Clock;
 use frunk::HList;
 use log::LevelFilter;
+use models::application_model::ApplicationModel;
+use models::keypad_model::KeypadModel;
 use panic_persist as _;
 use sh1106::prelude::*;
 use usb_device::class_prelude::*;
@@ -36,7 +39,7 @@ use crate::debounced_input_array::DebouncedInputArray;
 use crate::display_controller::DisplayController;
 use crate::keypad_controller::KeypadController;
 use crate::logger::Logger;
-use crate::models::{ApplicationModel, DisplayModel, KeypadModel, PeripheralsModel, UsbModel};
+use crate::models::{DisplayModel, PeripheralsModel, UsbModel};
 use crate::time::TimerClock;
 
 mod debounce;
@@ -48,9 +51,8 @@ mod logger;
 mod models;
 mod overlays;
 mod panic_display;
-mod status_view;
-mod text_view;
 mod time;
+mod views;
 
 pub const MAX_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 pub const XOSC_CRYSTAL_FREQ: Hertz = Hertz(12_000_000);
@@ -222,11 +224,11 @@ fn main() -> ! {
 
     let mut macropad_model = PeripheralsModel::new(clock, &KEYS);
     let mut display_model = DisplayModel::new(display, clock);
-    let mut key_model = KeypadModel::default();
+    let mut key_model = KeypadModel::new(clock);
     let mut app_model = ApplicationModel::default();
     let mut usb_model = UsbModel::new(&USBCTRL_SHARED, &KEYBOARD_LEDS);
 
-    let mut keypad_controller = KeypadController::new(clock);
+    let mut keypad_controller = KeypadController::new();
     let display_controller = DisplayController::default();
 
     //100 mico seconds
@@ -243,13 +245,16 @@ fn main() -> ! {
 
     log::info!("Entering main loop");
     loop {
+        let now = clock.try_now().unwrap();
         keypad_controller.tick(
+            &now,
             &mut macropad_model,
             &mut key_model,
             &mut usb_model,
             &mut app_model,
         );
         display_controller.tick(
+            &now,
             &mut display_model,
             &macropad_model,
             &mut key_model,

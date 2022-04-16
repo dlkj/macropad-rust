@@ -1,22 +1,23 @@
-use crate::keypad_controller::{Action, AppAction, KeyState};
 use crate::{DebouncedInputArray, Mutex, UsbState, LOGGER};
 use atomic_polyfill::AtomicU8;
 use core::cell::RefCell;
-use core::default::Default;
 use core::sync::atomic::Ordering;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::Drawable;
 use embedded_hal::digital::v2::PinState;
-use embedded_time::duration::{Generic, Microseconds, Milliseconds};
+use embedded_time::duration::{Microseconds, Milliseconds};
 use embedded_time::timer::param::{Periodic, Running};
 use embedded_time::{Clock, Timer};
-use heapless::{String, Vec};
+use heapless::String;
 use sh1106::interface::DisplayInterface;
 use sh1106::prelude::*;
 use usb_device::device::UsbDeviceState;
 use usbd_hid_devices::device::keyboard::NKROBootKeyboardInterface;
 use usbd_hid_devices::page::Keyboard;
 use usbd_hid_devices::UsbHidError;
+
+pub mod application_model;
+pub mod keypad_model;
 
 const DISPLAY_UPDATE: Microseconds = Microseconds(16667);
 const KEYPAD_UPDATE: Milliseconds = Milliseconds(20);
@@ -114,98 +115,6 @@ impl<'a, DI: DisplayInterface, C: Clock<T = u64>> DisplayModel<'a, DI, C> {
     }
 }
 
-pub struct ApplicationModel {
-    active_view: ApplicationView,
-    active_overlay: Overlay,
-    display_time: Generic<u64>,
-    last_actions: Vec<AppAction, 16>,
-}
-
-impl Default for ApplicationModel {
-    fn default() -> Self {
-        Self {
-            active_view: ApplicationView::Keypad,
-            active_overlay: Overlay::None,
-            display_time: Default::default(),
-            last_actions: Default::default(),
-        }
-    }
-}
-
-impl ApplicationModel {
-    pub fn active_view(&self) -> ApplicationView {
-        self.active_view
-    }
-    pub fn set_active_view(&mut self, active_view: ApplicationView) {
-        self.active_view = active_view;
-    }
-    pub fn active_overlay(&self) -> Overlay {
-        self.active_overlay
-    }
-    pub fn set_active_overlay(&mut self, active_overlay: Overlay) {
-        self.active_overlay = active_overlay;
-    }
-    pub(crate) fn set_display_time(&mut self, time: Generic<u64>) {
-        self.display_time = time;
-    }
-    pub fn display_time(&self) -> Generic<u64> {
-        self.display_time
-    }
-
-    pub fn last_actions(&self) -> &Vec<AppAction, 16> {
-        &self.last_actions
-    }
-
-    pub fn set_last_actions<'a, I: IntoIterator<Item = &'a AppAction>>(&mut self, last_actions: I) {
-        self.last_actions.clear();
-        for action in last_actions.into_iter() {
-            self.last_actions.push(*action).unwrap();
-        }
-    }
-}
-
-pub struct KeypadModel {
-    key_states: [KeyState; 13],
-    actions: Vec<Action, 32>,
-    keypad_time: Generic<u64>,
-}
-
-impl KeypadModel {
-    pub fn actions(&self) -> &Vec<Action, 32> {
-        &self.actions
-    }
-    pub fn set_actions<'a, I: IntoIterator<Item = &'a Action>>(&mut self, actions: I) {
-        self.actions.clear();
-        for action in actions.into_iter() {
-            self.actions.push(*action).unwrap();
-        }
-    }
-    pub(crate) fn set_keypad_time(&mut self, time: Generic<u64>) {
-        self.keypad_time = time;
-    }
-
-    pub fn keypad_time(&self) -> Generic<u64> {
-        self.keypad_time
-    }
-
-    pub fn key_states(&self) -> &'_ [KeyState; 13] {
-        &self.key_states
-    }
-    pub fn set_key_states(&mut self, key_states: [KeyState; 13]) {
-        self.key_states = key_states;
-    }
-}
-
-impl Default for KeypadModel {
-    fn default() -> Self {
-        Self {
-            key_states: [KeyState::Up; 13],
-            actions: Default::default(),
-            keypad_time: Default::default(),
-        }
-    }
-}
-
 pub struct PeripheralsModel<'a, C: Clock<T = u64>> {
     clock: &'a C,
     keys_update_timer: Timer<'a, Periodic, Running, C, Milliseconds>,
@@ -256,17 +165,4 @@ impl<'a, C: Clock<T = u64>> PeripheralsModel<'a, C> {
     pub fn clock(&self) -> &'a C {
         self.clock
     }
-}
-
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub enum ApplicationView {
-    Log,
-    Status,
-    Keypad,
-}
-
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub enum Overlay {
-    None,
-    ControllerTiming,
 }

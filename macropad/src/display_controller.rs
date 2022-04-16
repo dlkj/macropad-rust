@@ -1,13 +1,16 @@
 use crate::{PeripheralsModel, UsbModel};
 
 use crate::keypad_view::KeypadView;
-use crate::models::{ApplicationModel, ApplicationView, DisplayModel, KeypadModel, Overlay};
+use crate::models::application_model::{ApplicationModel, ApplicationView, Overlay};
+use crate::models::keypad_model::KeypadModel;
+use crate::models::DisplayModel;
 use crate::overlays::TimingOverlayView;
-use crate::status_view::StatusView;
-use crate::text_view::TextView;
 use crate::time::Stopwatch;
-use embedded_time::duration::Microseconds;
-use embedded_time::Clock;
+use crate::views::screensaver_view::ScreensaverView;
+use crate::views::status_view::StatusView;
+use crate::views::text_view::TextView;
+use embedded_time::duration::{Microseconds, Seconds};
+use embedded_time::{Clock, Instant};
 use sh1106::interface::DisplayInterface;
 
 #[derive(Default)]
@@ -16,15 +19,17 @@ pub struct DisplayController {}
 impl DisplayController {
     pub fn tick<DI: DisplayInterface, C: Clock<T = u64>>(
         &self,
+        now: &Instant<C>,
         display_model: &mut DisplayModel<'_, DI, C>,
         macropad_model: &PeripheralsModel<'_, C>,
-        key_model: &mut KeypadModel,
+        key_model: &mut KeypadModel<'_, C>,
         app_model: &mut ApplicationModel,
         usb_model: &UsbModel<'_>,
     ) {
         if display_model.display_update_due() {
             let stopwatch = Stopwatch::new(macropad_model.clock()).unwrap();
             self.update_display(
+                now,
                 display_model,
                 macropad_model,
                 key_model,
@@ -37,32 +42,37 @@ impl DisplayController {
 
     fn update_display<DI: DisplayInterface, C: Clock<T = u64>>(
         &self,
+        now: &Instant<C>,
         display_model: &mut DisplayModel<'_, DI, C>,
         macropad_model: &PeripheralsModel<'_, C>,
-        key_model: &KeypadModel,
+        key_model: &KeypadModel<'_, C>,
         app_model: &ApplicationModel,
         usb_model: &UsbModel<'_>,
     ) {
         display_model.display_clear();
         let f = display_model.frame_clounter_get_and_increment();
 
-        match app_model.active_view() {
-            ApplicationView::Log => {
-                display_model.display_draw(TextView::new(macropad_model.log_lines()));
-            }
-            ApplicationView::Status => {
-                display_model.display_draw(StatusView::new(
-                    macropad_model.ticks_since_epoc(),
-                    key_model.key_states(),
-                    usb_model.keyboard_leds(),
-                    usb_model.usb_state(),
-                ));
-            }
-            ApplicationView::Keypad => {
-                display_model.display_draw(KeypadView::new(
-                    key_model.key_states(),
-                    usb_model.keyboard_leds() & 1 > 0,
-                ));
+        if *key_model.last_keypress_time() + Seconds(60u32) < *now {
+            display_model.display_draw(ScreensaverView::new(*now))
+        } else {
+            match app_model.active_view() {
+                ApplicationView::Log => {
+                    display_model.display_draw(TextView::new(macropad_model.log_lines()));
+                }
+                ApplicationView::Status => {
+                    display_model.display_draw(StatusView::new(
+                        macropad_model.ticks_since_epoc(),
+                        key_model.key_states(),
+                        usb_model.keyboard_leds(),
+                        usb_model.usb_state(),
+                    ));
+                }
+                ApplicationView::Keypad => {
+                    display_model.display_draw(KeypadView::new(
+                        key_model.key_states(),
+                        usb_model.keyboard_leds() & 1 > 0,
+                    ));
+                }
             }
         }
 

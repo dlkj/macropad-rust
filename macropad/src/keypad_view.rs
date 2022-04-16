@@ -1,4 +1,4 @@
-use crate::keypad_controller::KeyState;
+use crate::models::keypad_model::KeyState;
 use embedded_graphics::mono_font::ascii::FONT_6X13_BOLD;
 use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::BinaryColor;

@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use crate::keypad_controller::KeyState;
+use crate::models::keypad_model::KeyState;
 use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::geometry::Point;
 use embedded_graphics::mono_font::ascii::FONT_4X6;
