@@ -17,7 +17,7 @@ embedded-hal = { version = "0.2", features=["unproven"] }
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 rp2040-boot2 = { version = "0.2" }
-adafruit-macropad = { version = "0.1" }
+adafruit-macropad = { version = "0.2" }
 panic-persist = { version = "0.3", features = ["utf8"] }
 log = { version = "0.4", default-features = false }
 embedded-time = "0.12"
@@ -27,10 +27,9 @@ embedded-text = { version = "0.5", default-features = false }
 heapless = { version = "0.7"}
 atomic-polyfill = "0.1"
 usb-device= "0.2"
-usbd-hid-devices = { git = "https://github.com/dlkj/usbd-hid-devices" }
+usbd-human-interface-device = "0.2"
 frunk = { version = "0.4", default-features = false }
-hash32 = "0.2"
-hash32-derive = "0.1"
+hash32 = "0.3"
 packed_struct = { version = "0.10", default-features = false }
 num-traits = { version = "0.2", default-features = false }
 

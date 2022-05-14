@@ -12,9 +12,9 @@ use heapless::String;
 use sh1106::interface::DisplayInterface;
 use sh1106::prelude::*;
 use usb_device::device::UsbDeviceState;
-use usbd_hid_devices::device::keyboard::NKROBootKeyboardInterface;
-use usbd_hid_devices::page::Keyboard;
-use usbd_hid_devices::UsbHidError;
+use usbd_human_interface_device::device::keyboard::NKROBootKeyboardInterface;
+use usbd_human_interface_device::page::Keyboard;
+use usbd_human_interface_device::UsbHidError;
 
 pub mod application_model;
 pub mod keypad_model;

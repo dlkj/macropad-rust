@@ -4,7 +4,7 @@ use crate::time::Stopwatch;
 use crate::{PeripheralsModel, UsbModel};
 use embedded_hal::digital::v2::PinState;
 use embedded_time::{Clock, Instant};
-use usbd_hid_devices::page::Keyboard;
+use usbd_human_interface_device::page::Keyboard;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum Action {

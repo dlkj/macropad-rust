@@ -4,7 +4,7 @@ use embedded_time::fixed_point::FixedPoint;
 use embedded_time::{Clock, Instant};
 use heapless::Vec;
 use num_traits::Bounded;
-use usbd_hid_devices::page::Keyboard;
+use usbd_human_interface_device::page::Keyboard;
 
 const KEY_COUNT: usize = 13;
 

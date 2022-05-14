@@ -29,10 +29,10 @@ use panic_persist as _;
 use sh1106::prelude::*;
 use usb_device::class_prelude::*;
 use usb_device::prelude::*;
-use usbd_hid_devices::device::consumer::ConsumerControlInterface;
-use usbd_hid_devices::device::keyboard::NKROBootKeyboardInterface;
-use usbd_hid_devices::device::mouse::WheelMouseInterface;
-use usbd_hid_devices::prelude::*;
+use usbd_human_interface_device::device::consumer::ConsumerControlInterface;
+use usbd_human_interface_device::device::keyboard::NKROBootKeyboardInterface;
+use usbd_human_interface_device::device::mouse::WheelMouseInterface;
+use usbd_human_interface_device::prelude::*;
 
 use crate::debounce::DebouncedInputPin;
 use crate::debounced_input_array::DebouncedInputArray;
@@ -170,11 +170,11 @@ fn main() -> ! {
 
     let usb_hid = UsbHidClassBuilder::new()
         .add_interface(
-            usbd_hid_devices::device::keyboard::NKROBootKeyboardInterface::default_config(clock),
+            usbd_human_interface_device::device::keyboard::NKROBootKeyboardInterface::default_config(clock),
         )
-        .add_interface(usbd_hid_devices::device::mouse::WheelMouseInterface::default_config())
+        .add_interface(usbd_human_interface_device::device::mouse::WheelMouseInterface::default_config())
         .add_interface(
-            usbd_hid_devices::device::consumer::ConsumerControlInterface::default_config(),
+            usbd_human_interface_device::device::consumer::ConsumerControlInterface::default_config(),
         )
         //Build
         .build(usb_alloc);
