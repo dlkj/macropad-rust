@@ -4,14 +4,14 @@ version = 3
 
 [[package]]
 name = "adafruit-macropad"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2544dd6791e1696debf24f1fe071d7d7d50c0646d32337cbb7ec8152e22de046"
+checksum = "f581ebf7b900063a763ebedc5712a8c2a5781fb84f344b833e35d152e597079f"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "rp2040-boot2",
- "rp2040-hal",
+ "rp2040-hal 0.4.0",
 ]
 
 [[package]]
@@ -533,7 +533,28 @@ dependencies = [
  "paste",
  "pio 0.1.0",
  "rand_core",
- "rp2040-pac",
+ "rp2040-pac 0.2.1",
+ "usb-device",
+ "vcell",
+ "void",
+]
+
+[[package]]
+name = "rp2040-hal"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4bca865e0a5a0aba04992ede50d7585f3dba13863943445b5ad1c81270e112e"
+dependencies = [
+ "cortex-m",
+ "critical-section",
+ "embedded-hal",
+ "embedded-time",
+ "itertools",
+ "nb 1.0.0",
+ "paste",
+ "pio 0.2.0",
+ "rand_core",
+ "rp2040-pac 0.3.0",
  "usb-device",
  "vcell",
  "void",
@@ -544,6 +565,16 @@ name = "rp2040-pac"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db04fc92670038074acf20ad422130b735897937812a1761b17cfc26d56c253f"
+dependencies = [
+ "cortex-m",
+ "vcell",
+]
+
+[[package]]
+name = "rp2040-pac"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13a6106d5db01c7171a39c1f7696780912db9b42fe7ac722db60069c8904ea7c"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -718,6 +749,6 @@ dependencies = [
  "embedded-time",
  "nb 1.0.0",
  "pio 0.1.0",
- "rp2040-hal",
+ "rp2040-hal 0.3.0",
  "smart-leds-trait",
 ]
