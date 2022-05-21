@@ -53,8 +53,10 @@ impl DisplayController {
         let f = display_model.frame_clounter_get_and_increment();
 
         if *key_model.last_keypress_time() + Seconds(60u32) < *now {
-            display_model.display_draw(ScreensaverView::new(*now))
+            display_model.set_contrast(0);
+            display_model.display_draw(ScreensaverView::new(*now, usb_model.keyboard_leds()))
         } else {
+            display_model.set_contrast(0xFF);
             match app_model.active_view() {
                 ApplicationView::Log => {
                     display_model.display_draw(TextView::new(macropad_model.log_lines()));

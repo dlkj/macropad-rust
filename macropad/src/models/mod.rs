@@ -90,6 +90,10 @@ impl<'a, DI: DisplayInterface, C: Clock<T = u64>> DisplayModel<'a, DI, C> {
         view.draw(&mut self.display).unwrap();
     }
 
+    pub fn set_contrast(&mut self, contrast: u8) {
+        self.display.set_contrast(contrast).ok();
+    }
+
     pub fn display_clear(&mut self) {
         self.display.clear();
     }
