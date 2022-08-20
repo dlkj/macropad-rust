@@ -40,10 +40,6 @@ use usb_device::class_prelude::*;
 use usbd_hid::descriptor::KeyboardReport;
 use ws2812_pio::Ws2812;
 
-#[link_section = ".boot2"]
-#[used]
-pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GD25Q64CS;
-
 type Spi = rp2040_hal::spi::Spi<rp2040_hal::spi::Enabled, rp2040_hal::pac::SPI1, 8_u8>;
 type OledDisplay = oled_display::OledDisplay<sh1106::interface::SpiInterface<Spi, DynPin, DynPin>>;
 
