@@ -4,14 +4,14 @@ version = 3
 
 [[package]]
 name = "adafruit-macropad"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edc9cdc0c832cb024f86584c01bbb7e62fe022c68a0d91f46d74af11e6c78e29"
+checksum = "5d2a32c1b233d60b148b06c5f14a4b82bd489aef2d751385d482c6f00ca3356f"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "rp2040-boot2",
- "rp2040-hal",
+ "rp2040-hal 0.6.0",
 ]
 
 [[package]]
@@ -172,6 +172,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "critical-section"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d02ba51481d019be9c74a831d1133c364d78831b75c833478f3a21e1fd91e01a"
+
+[[package]]
 name = "debounce"
 version = "0.1.0"
 dependencies = [
@@ -256,6 +262,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "fugit"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ab17bb279def6720d058cb6c052249938e7f99260ab534879281a95367a87e5"
+dependencies = [
+ "gcd",
+]
+
+[[package]]
+name = "gcd"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f37978dab2ca789938a83b2f8bc1ef32db6633af9051a6cd409eff72cbaaa79a"
+dependencies = [
+ "paste",
 ]
 
 [[package]]
@@ -503,9 +527,33 @@ checksum = "0de1bc8bf092f5da649a417ad9f18c9705b6226afe3521a469f15d1d2bcb7f66"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
- "critical-section",
+ "critical-section 0.2.7",
  "embedded-hal",
  "embedded-time",
+ "itertools",
+ "nb 1.0.0",
+ "paste",
+ "pio",
+ "rand_core",
+ "rp2040-hal-macros",
+ "rp2040-pac",
+ "usb-device",
+ "vcell",
+ "void",
+]
+
+[[package]]
+name = "rp2040-hal"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f919d0d3c64fd9c7642dac2267a55d6aa1667e45329e8605a3858727acc7711"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "critical-section 0.2.7",
+ "critical-section 1.1.0",
+ "embedded-hal",
+ "fugit",
  "itertools",
  "nb 1.0.0",
  "paste",
@@ -710,6 +758,6 @@ dependencies = [
  "embedded-time",
  "nb 1.0.0",
  "pio",
- "rp2040-hal",
+ "rp2040-hal 0.5.0",
  "smart-leds-trait",
 ]
