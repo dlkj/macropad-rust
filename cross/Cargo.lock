@@ -11,7 +11,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "rp2040-boot2",
- "rp2040-hal",
+ "rp2040-hal 0.5.0",
 ]
 
 [[package]]
@@ -172,6 +172,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "critical-section"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
+
+[[package]]
 name = "debounce"
 version = "0.1.0"
 dependencies = [
@@ -257,6 +263,21 @@ checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
 dependencies = [
  "num-traits",
 ]
+
+[[package]]
+name = "fugit"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ab17bb279def6720d058cb6c052249938e7f99260ab534879281a95367a87e5"
+dependencies = [
+ "gcd",
+]
+
+[[package]]
+name = "gcd"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4b1b088ad0a967aa29540456b82fc8903f854775d33f71e9709c4efb3dfbfd2"
 
 [[package]]
 name = "itertools"
@@ -503,7 +524,7 @@ checksum = "0de1bc8bf092f5da649a417ad9f18c9705b6226afe3521a469f15d1d2bcb7f66"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
- "critical-section",
+ "critical-section 0.2.7",
  "embedded-hal",
  "embedded-time",
  "itertools",
@@ -512,7 +533,29 @@ dependencies = [
  "pio",
  "rand_core",
  "rp2040-hal-macros",
- "rp2040-pac",
+ "rp2040-pac 0.3.0",
+ "usb-device",
+ "vcell",
+ "void",
+]
+
+[[package]]
+name = "rp2040-hal"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ecf1b975581f0cac465247c464e7d2b8d93c7a5fceb4eb13b7b8517f4f85f6d"
+dependencies = [
+ "cortex-m",
+ "critical-section 1.1.1",
+ "embedded-hal",
+ "fugit",
+ "itertools",
+ "nb 1.0.0",
+ "paste",
+ "pio",
+ "rand_core",
+ "rp2040-hal-macros",
+ "rp2040-pac 0.4.0",
  "usb-device",
  "vcell",
  "void",
@@ -538,6 +581,16 @@ checksum = "13a6106d5db01c7171a39c1f7696780912db9b42fe7ac722db60069c8904ea7c"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
+ "vcell",
+]
+
+[[package]]
+name = "rp2040-pac"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9192cafbb40d717c9e0ddf767aaf9c69fee1b4e48d22ed853b57b11f6d9f3d7e"
+dependencies = [
+ "cortex-m",
  "vcell",
 ]
 
@@ -701,15 +754,15 @@ dependencies = [
 
 [[package]]
 name = "ws2812-pio"
-version = "0.3.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59c8b2e9830ab583b86349261a5980a0a33151f812abbb21019444822bb61d27"
+checksum = "3adb47d7fe2fc0590cb0a3d202abc50272105ddd3bebcca68d24d18ef3cab2fb"
 dependencies = [
  "cortex-m",
  "embedded-hal",
- "embedded-time",
+ "fugit",
  "nb 1.0.0",
  "pio",
- "rp2040-hal",
+ "rp2040-hal 0.7.0",
  "smart-leds-trait",
 ]
