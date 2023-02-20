@@ -20,7 +20,7 @@ usbd-serial = "0.1"
 usbd-hid = "0.6"
 sh1106 = "0.4"
 
-adafruit-macropad = { version = "0.3" }
+adafruit-macropad = { version = "0.6" }
 rp2040-boot2 = { version = "0.2" }
 pio = { version = "0.2" }
 ws2812-pio = { version = "0.3" }
